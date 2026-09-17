@@ -44,7 +44,11 @@ task = "translate"
 # "" = autodetect the spoken language (recommended). Force it to "pl" if
 # autodetect keeps guessing wrong.
 language = ""
-beam_size = 5
+
+# 1 = greedy decoding. Measured on real speech with MSFS running: beam_size 5
+# took 6.00s where 1 took 1.17s, for byte-identical output. Command phrases
+# are short and unambiguous; the wider search buys nothing here.
+beam_size = 1
 
 [llm]
 # Only used when [intent] backend = "claude".

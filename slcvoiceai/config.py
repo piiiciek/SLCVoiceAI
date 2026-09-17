@@ -23,7 +23,11 @@ class SttConfig:
     device: str = "cuda"            # "cuda" or "cpu"
     compute_type: str = "float16"   # "int8" is a good CPU fallback
     language: str = ""              # "" = autodetect, "pl" / "en" to force
-    beam_size: int = 5
+    #: 1 (greedy). Measured on real speech with the simulator running,
+    #: beam_size=5 took 6.00s against 1.17s for the same model and produced
+    #: byte-identical text: command phrases are short and unambiguous, so the
+    #: extra search buys nothing and costs a five-fold wait.
+    beam_size: int = 1
 
     # "translate" makes Whisper emit English whatever you speak, which is what
     # lets the offline fuzzy backend match Polish speech against SLC's English

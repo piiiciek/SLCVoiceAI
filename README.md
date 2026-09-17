@@ -220,7 +220,9 @@ python -m pytest tests/ -q
 
 **"SLC is offering no buttons right now"** — either SLC has no communications popup open, or its buttons are not UIA-visible. Run the probe.
 
-**Whisper falls back to CPU** — your PyTorch/CUDA install does not see the GPU. The bridge will still work, just slower.
+**Whisper falls back to CPU** — on Windows this is usually the CUDA runtime, not the driver. `nvidia-cublas-cu12` and `nvidia-cudnn-cu12` are in `requirements.txt` for exactly this; without them the model loads on the GPU and then every transcription dies with `Library cublas64_12.dll is not found`.
+
+**Transcription is slow** — check `beam_size` is 1. Measured on real speech with MSFS running, `beam_size = 5` took 6.00s against 1.17s for byte-identical output. If it is still slow, the simulator is competing for the GPU: `medium` (1.24s), `small` (0.68s) and `base` (0.40s) all transcribed the benchmark phrase correctly, though the smaller ones are noticeably weaker outside English.
 
 **Nothing is transcribed** — wrong input device. `--list-devices`, then set `input_device` explicitly.
 
