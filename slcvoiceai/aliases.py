@@ -30,8 +30,14 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "no problem": ("thats fine", "no worries", "not a problem", "its fine"),
 
     # --- radio discipline ------------------------------------------------
+    # Answering a call. Polish "prosze mowic" and "tak slucham" come back as
+    # "Please speak" and "Yes I'm listening" - neither shares a word with
+    # "GO AHEAD".
     "go ahead": ("send it", "send your message", "pass your message",
-                 "im listening", "listening", "go on", "yes go ahead"),
+                 "im listening", "listening", "go on", "yes go ahead",
+                 "please speak", "speak", "speak to me", "talk to me",
+                 "yes im listening", "i am listening", "go ahead please",
+                 "what is it", "what do you need", "you can speak"),
     "standby": ("stand by", "wait", "hold on", "one moment", "just a second",
                 "give me a moment", "wait a moment"),
     "repeat transmission": ("say again", "repeat", "repeat that",

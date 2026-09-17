@@ -69,8 +69,11 @@ class Bridge:
             log.warning("Heard %r but SLC is offering no buttons right now "
                         "(is it running, and in a flight?).", text)
             return
+        # The whole list, not a sample. When a command does not land, the
+        # first question is always whether the button was even on offer -
+        # and a truncated list cannot answer it.
         log.info("SLC is offering %d action(s): %s",
-                 len(actions), ", ".join(a.name for a in actions[:12]))
+                 len(actions), ", ".join(a.name for a in actions))
 
         context = format_context(read_flight_context(self.cfg.slc.stream_export_dir))
         decision = self.router.decide(text, actions, context)

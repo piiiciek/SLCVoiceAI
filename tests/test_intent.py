@@ -479,6 +479,31 @@ def test_describing_the_ui_does_not_hijack_the_command(router, discourse_actions
     assert actions[decision.action_index].name == expected
 
 
+ANSWERING_TRANSCRIPTS = [
+    # "prosze mowic" and "tak slucham", as Whisper renders them. Neither
+    # shares a word with "GO AHEAD".
+    ("Please speak", "GO AHEAD"),
+    ("Yes I am listening", "GO AHEAD"),
+    ("I am listening", "GO AHEAD"),
+    ("talk to me", "GO AHEAD"),
+    ("what do you need", "GO AHEAD"),
+]
+
+
+@pytest.mark.parametrize("said,expected", ANSWERING_TRANSCRIPTS)
+def test_answering_a_call_routes(router, discourse_actions, said, expected):
+    actions = discourse_actions + [FakeAction("Tannoy"), FakeAction("Seatbelts")]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected
+
+
+def test_talking_about_speaking_is_not_a_command(router, discourse_actions):
+    actions = discourse_actions + [FakeAction("Tannoy"), FakeAction("Seatbelts")]
+    assert router.decide("we can speak about it after landing",
+                         actions).action_index is None
+
+
 def test_toolbar_toggle_is_not_a_voice_target():
     """Its name comes from cmdMainButton, says nothing about what it does,
     and attracts any sentence containing "button"."""
