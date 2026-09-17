@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 
 from .config import Config
@@ -29,6 +30,47 @@ def setup_logging(log_file: str) -> None:
     logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
+class _Scan:
+    """Reads SLC's buttons on a worker thread, alongside transcription.
+
+    UI Automation is COM, so the thread needs its own apartment - and which
+    one matters. Measured against a live SLC, the same scan takes 2.14s in a
+    single-threaded apartment and 2.90s in a multi-threaded one, where every
+    call has to be marshalled. STA also beats running it on the main thread
+    (2.47s).
+    """
+
+    def __init__(self, ui: SlcUI):
+        self.ui = ui
+        self._thread: threading.Thread | None = None
+        self._actions: list | None = None
+        self._error: Exception | None = None
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            import comtypes
+            comtypes.CoInitializeEx(comtypes.COINIT_APARTMENTTHREADED)
+        except Exception:  # pragma: no cover - already initialised is fine
+            pass
+        try:
+            self._actions = self.ui.list_actions()
+        except Exception as exc:
+            self._error = exc
+
+    def result(self, timeout: float = 15.0) -> list:
+        if self._thread is not None:
+            self._thread.join(timeout)
+            if self._thread.is_alive():
+                raise UIAUnavailable("the UI scan did not finish in time")
+        if self._error is not None:
+            raise self._error
+        return self._actions or []
+
+
 class Bridge:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -40,6 +82,13 @@ class Bridge:
 
     def handle(self, audio, captured_at: float | None = None) -> None:
         started = time.time()
+
+        # Reading SLC's UI costs about as long as transcribing, and the two do
+        # not depend on each other - the button list is the same whatever the
+        # pilot turns out to have said. Run them together and the command
+        # takes as long as the slower one instead of both in turn.
+        scan = _Scan(self.ui)
+        scan.start()
 
         text, language = self.stt.transcribe(audio)
 
@@ -59,7 +108,7 @@ class Bridge:
             return
 
         try:
-            actions = self.ui.list_actions()
+            actions = scan.result()
         except UIAUnavailable as exc:
             log.error("Heard %r but %s - command dropped, please say it again.",
                       text, exc)
