@@ -32,6 +32,11 @@ DENYLIST = (
     "cancel single flight",
     "do not restore previous flight",
     "dispatch next flight",
+    # Toolbar chrome. Its name comes from cmdMainButton and says nothing about
+    # what it does (it collapses SLC's icon row), while acting as a magnet for
+    # any sentence containing "button": "press the button to fasten the
+    # seatbelt" reached it at 0.71 and hid the toolbar.
+    "main button",
     # Licensing, settings and chrome - never something you "say".
     "activate self-loading cargo",
     "join discord",

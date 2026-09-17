@@ -455,6 +455,37 @@ def test_departure_and_arrival_variants_are_left_ambiguous(router, delay_actions
     assert router.decide(said, delay_actions).action_index is None
 
 
+UI_WORD_TRANSCRIPTS = [
+    # Verbatim, from "wlacz przycisk zapiecia pasow"
+    (", press the button to fasten the seatbelt,", "Seatbelts"),
+    ("turn on the seatbelt sign", "Seatbelts"),
+    ("fasten seat belts", "Seatbelts"),
+    ("belts on", "Seatbelts"),
+    ("press the doors button", "Toggle Doors"),
+]
+
+
+@pytest.mark.parametrize("said,expected", UI_WORD_TRANSCRIPTS)
+def test_describing_the_ui_does_not_hijack_the_command(router, discourse_actions,
+                                                       said, expected):
+    """"press the button to..." is how a person describes using an interface,
+    not part of what they want done. The word "button" reached the control
+    named "Main Button" at 0.71 and collapsed SLC's toolbar, while Seatbelts
+    - one word against a four-word sentence - was damped to 0.25."""
+    actions = discourse_actions + [FakeAction("Seatbelts"),
+                                   FakeAction("Toggle Doors")]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected
+
+
+def test_toolbar_toggle_is_not_a_voice_target():
+    """Its name comes from cmdMainButton, says nothing about what it does,
+    and attracts any sentence containing "button"."""
+    from slcvoiceai.slc_ui import is_denied
+    assert is_denied("Main Button")
+
+
 def test_specific_key_beats_generic_one(router):
     """A button must not inherit aliases from a key it merely contains.
 

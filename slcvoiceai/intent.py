@@ -66,6 +66,10 @@ _NOISE = {
     "our", "your", "we", "i", "it", "that", "this", "will", "can", "could",
     "would", "you", "us", "them", "slc", "captain", "cockpit", "me", "my",
     "some", "just", "now", "there",
+    # "press the button to..." is how a person describes using a UI, not part
+    # of what they want done. No SLC control carries the word except the one
+    # that toggles the toolbar, which is denylisted for exactly this reason.
+    "button", "press", "click", "switch",
 }
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
