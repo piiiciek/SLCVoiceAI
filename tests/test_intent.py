@@ -220,6 +220,45 @@ def test_short_alias_cannot_claim_a_long_utterance(router, opposite_actions):
     assert opposite_actions[decision.action_index].name == "GSX, START CATERING"
 
 
+#: Buttons SLC showed during a real boarding sequence.
+BOARDING_BUTTONS = SLC_BUTTONS + [
+    "START BOARDING WHEN READY", "YES, START BOARDING", "REQUEST LOADING UPDATE",
+    "REQUEST OFFLOADING UPDATE", "YES, START LOADING", "GSX, START BOARDING",
+    "GSX, START CATERING", "CONNECT JETWAY", "DISCONNECT JETWAY", "HELLO?",
+]
+
+#: Verbatim Whisper output captured in use. Polish "ladowac" means both
+#: letting passengers on and loading cargo, so it arrives as "load" or even
+#: "charge" - words with nothing in common with "BOARDING".
+REAL_TRANSCRIPTS = [
+    ("OK, you can load if you are ready.", "START BOARDING WHEN READY"),
+    ("You can charge passengers when you are ready.", "START BOARDING WHEN READY"),
+    ("How does the charging look like?", "REQUEST LOADING UPDATE"),
+    ("Connect the Jetway.", "CONNECT JETWAY"),
+    ("Cockpit for ground control", "GROUND CREW >"),
+    ("Hello?", "HELLO?"),
+]
+
+
+@pytest.fixture(scope="module")
+def boarding_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in BOARDING_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", REAL_TRANSCRIPTS)
+def test_real_transcripts_route(router, boarding_actions, said, expected):
+    decision = router.decide(said, boarding_actions)
+    assert decision.action_index is not None, "declined a real command: " + said
+    assert boarding_actions[decision.action_index].name == expected
+
+
+def test_charging_alias_does_not_catch_small_talk(router, boarding_actions):
+    """"charging" now reaches the loading buttons - it must not reach them
+    from a sentence about a phone battery."""
+    decision = router.decide("my phone battery is charging", boarding_actions)
+    assert decision.action_index is None
+
+
 def test_empty_action_list_declines(router):
     assert router.decide("intercom", []).action_index is None
 

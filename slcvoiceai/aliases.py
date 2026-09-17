@@ -54,10 +54,28 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "phone": ("company phone", "call the company", "telephone", "dial"),
 
     # --- boarding and doors ----------------------------------------------
+    # Polish "ladowac" covers both letting passengers on and loading cargo, so
+    # Whisper renders it literally as "load" or even "charge" - neither of
+    # which resembles "BOARDING" at all. Observed in use: "ok, mozecie
+    # ladowac jak jestescie gotowi" came back as "OK, you can load if you are
+    # ready." and scored 0.49 against START BOARDING WHEN READY.
     "start boarding": ("begin boarding", "let them board", "board the passengers",
                        "passengers can board", "boarding can start",
-                       "start letting them on"),
+                       "start letting them on", "load the passengers",
+                       "charge the passengers", "you can load", "you can charge"),
+    "start boarding when ready": ("you can load if you are ready",
+                                  "you can load when ready",
+                                  "load when you are ready",
+                                  "charge passengers when you are ready",
+                                  "board when you are ready",
+                                  "let them on when you are ready"),
     "ready to start boarding": ("we are ready to board", "ready for boarding"),
+    "request loading update": ("how is the loading going", "how does the loading look",
+                               "loading status", "how is the charging",
+                               "how does the charging look", "hows the loading",
+                               "any update on loading", "how is loading"),
+    "request offloading update": ("how is the offloading going",
+                                  "offloading status", "how is the unloading"),
     "open the doors": ("open up", "doors open", "you can open the doors",
                        "let them out", "open a door"),
     "please close the doors": ("close up", "doors closed", "shut the doors",
