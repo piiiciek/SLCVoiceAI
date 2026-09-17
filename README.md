@@ -157,6 +157,27 @@ you actually speak.
 
 ## Use
 
+### The control panel
+
+```bash
+python -m slcvoiceai --gui
+```
+
+A small always-on-top window that sits beside the simulator and answers,
+without opening a log file: is it listening and on which device, what did it
+hear, what did it match, did it press anything, and if it refused — why.
+
+It shows every candidate's score, not just the winner, because the margin over
+the runner-up explains a refusal better than the winning number does. The
+confidence floor is a live slider and dry-run is a checkbox, so tuning needs no
+restart.
+
+The **"try a phrase"** box runs the whole matching chain on typed text — no
+microphone, no flight needed. Useful for working out why a command missed, and
+for testing on the ground.
+
+### Headless
+
 Always start in dry-run, which decides and logs but never presses anything:
 
 ```bash
@@ -206,6 +227,7 @@ slcvoiceai/
   intent.py     Claude: utterance + button list -> decision
   context.py    optional flight context from SLC's stream export
   config.py     config.toml loading
+  gui.py        tkinter control panel (--gui)
 tools/
   probe_slc.py  standalone UIA diagnostic
 tests/

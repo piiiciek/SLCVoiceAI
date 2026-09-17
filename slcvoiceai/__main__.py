@@ -15,6 +15,8 @@ def main(argv: list[str] | None = None) -> int:
         description="Speak naturally, in any language, to Self-Loading Cargo.")
     ap.add_argument("-c", "--config", default="config.toml",
                     help="path to config.toml (default: ./config.toml)")
+    ap.add_argument("--gui", action="store_true",
+                    help="open the control panel instead of running headless")
     ap.add_argument("--dry-run", action="store_true",
                     help="decide but never actually press anything")
     ap.add_argument("--list-actions", action="store_true",
@@ -62,6 +64,10 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+
+    if args.gui:
+        from .gui import run as run_gui
+        return run_gui(cfg)
 
     return Bridge(cfg).run()
 

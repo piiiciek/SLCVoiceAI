@@ -106,19 +106,29 @@ class FuzzyRouter:
         # combination separated by 0.02.
         return self._fuzz.token_set_ratio(said, candidate) / 100.0
 
+    def rank(self, utterance: str, actions: list[Action]) -> list[tuple[float, int, Action]]:
+        """Every candidate scored, best first.
+
+        Exposed so a UI can show *why* something was picked or refused - the
+        margin over the runner-up is usually more informative than the winning
+        score on its own.
+        """
+        said = normalise(utterance)
+        if not said or not actions:
+            return []
+        return sorted(
+            ((self._score(said, normalise(a.name)), i, a) for i, a in enumerate(actions)),
+            key=lambda t: t[0], reverse=True,
+        )
+
     def decide(self, utterance: str, actions: list[Action],
                flight_context: str = "") -> Decision:
         if not actions:
             return Decision(reasoning="SLC is offering no buttons right now.")
 
-        said = normalise(utterance)
-        if not said:
+        scored = self.rank(utterance, actions)
+        if not scored:
             return Decision(reasoning="Nothing matchable in that utterance.")
-
-        scored = sorted(
-            ((self._score(said, normalise(a.name)), i, a) for i, a in enumerate(actions)),
-            key=lambda t: t[0], reverse=True,
-        )
         best_score, best_index, best_action = scored[0]
         runner_up = scored[1][0] if len(scored) > 1 else 0.0
 
