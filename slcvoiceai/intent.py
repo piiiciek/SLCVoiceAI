@@ -169,7 +169,7 @@ class FuzzyRouter:
         """
         said_tokens = set(said.split())
         name = normalise(action.name)
-        best = self._score(said, name) * self._name_reach(name, said_tokens)
+        best = self._score(said, name) * self._name_reach(action.name, said_tokens)
         for alias in aliases_for(action.name):
             if best >= 0.99:
                 break
@@ -214,19 +214,25 @@ class FuzzyRouter:
         return min(1.0, len(candidate.split()) / max(len(said_tokens), 1))
 
     @staticmethod
-    def _name_reach(name: str, said_tokens: set[str]) -> float:
+    def _name_reach(raw_name: str, said_tokens: set[str]) -> float:
         """Damping for a button's own name - only for single-word names.
 
         "my phone battery is charging" scored 1.00 against the button
         "PHONE >", and the same held for BACK, YES, NO and SETTINGS: one
         incidental word was enough to claim a whole sentence.
 
-        Applied only to one-word names, deliberately. Damping every name by
-        length punishes the ordinary case, where a short button legitimately
-        answers a longer sentence - "Let's start with the ground operation"
-        is five words for the two of "GROUND CREW >".
+        Measured against the button's *raw* name, not the filtered one.
+        "THANK YOU" is two words that normalise down to one because "you" is
+        filler, and damping it as a one-word button halved "OK, thanks." to
+        0.50 - so it tied with "Stand By" and was refused, while a bare
+        "Thank you." sailed through at 1.00.
+
+        Applied only to genuinely one-word names, deliberately. Damping every
+        name by length punishes the ordinary case, where a short button
+        legitimately answers a longer sentence - "Let's start with the ground
+        operation" is five words for the two of "GROUND CREW >".
         """
-        if len(name.split()) > 1:
+        if len([w for w in re.split(r"[^A-Za-z0-9]+", raw_name) if w]) > 1:
             return 1.0
         return min(1.0, 1.0 / max(len(said_tokens), 1))
 

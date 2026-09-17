@@ -24,7 +24,8 @@ ALIASES: dict[str, tuple[str, ...]] = {
               "okay", "alright", "sure"),
     "will do": ("wilco", "we will", "i will do that", "consider it done"),
     "thank you": ("thanks", "thanks a lot", "cheers", "much appreciated",
-                  "appreciate it"),
+                  "appreciate it", "ok thanks", "okay thanks", "thanks then",
+                  "alright thanks", "thank you very much"),
     "thanks very much": ("thank you very much", "many thanks"),
     "no problem": ("thats fine", "no worries", "not a problem", "its fine"),
 
@@ -167,6 +168,8 @@ ALIASES: dict[str, tuple[str, ...]] = {
                 "that will do", "good enough", "super", "great", "thats fine",
                 "leave it there", "just right", "thats good"),
     "hows it going": ("how does it go", "how is it going", "how are things",
+                      "how does it look", "how does it look like",
+                      "how is it looking", "how does it fly",
                       "hows everything", "how is everything going",
                       "whats the situation"),
     "how are the passengers": ("how are the people", "are the passengers ok",

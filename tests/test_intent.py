@@ -316,6 +316,34 @@ def test_cabin_transcripts_route(router, cabin_actions, said, expected):
     assert cabin_actions[decision.action_index].name == expected
 
 
+#: "THANK YOU" is two words that normalise to one, because "you" is filler.
+#: Damping it as a one-word button halved "OK, thanks." and tied it with
+#: "Stand By", while a bare "Thank you." scored 1.00 - so the command worked
+#: only when said with nothing in front of it.
+POLITE_BUTTONS = CABIN_BUTTONS + ["THANK YOU", "THANKS VERY MUCH", "Stand By"]
+
+POLITE_TRANSCRIPTS = [
+    ("OK, thanks.", "THANK YOU"),
+    ("Thank you.", "THANK YOU"),
+    ("OK, thank you.", "THANK YOU"),
+    ("How does it look like?", "HOW'S IT GOING?"),
+    ("Cockpit for stewardess", "INTERCOM >"),
+]
+
+
+@pytest.fixture(scope="module")
+def polite_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in POLITE_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", POLITE_TRANSCRIPTS)
+def test_filler_before_a_command_does_not_break_it(router, polite_actions,
+                                                   said, expected):
+    decision = router.decide(said, polite_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert polite_actions[decision.action_index].name == expected
+
+
 def test_specific_key_beats_generic_one(router):
     """A button must not inherit aliases from a key it merely contains.
 
