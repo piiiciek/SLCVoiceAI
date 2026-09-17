@@ -175,6 +175,32 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "how are the passengers": ("how are the people", "are the passengers ok",
                                "how is the cabin"),
 
+    # --- delays ----------------------------------------------------------
+    # SLC has twenty delay-related buttons and several contain each other's
+    # words, so the keys here are deliberately long: aliases_for takes only
+    # the most specific match, and a loose key would hand a departure alias
+    # to an arrival button.
+    "short delay expected": ("short delay", "we can expect a short delay",
+                             "small delay", "slight delay", "minor delay",
+                             "brief delay", "a little delay"),
+    "extended delay expected": ("long delay", "big delay", "significant delay",
+                                "extended delay", "lengthy delay"),
+    "medium delay expected": ("medium delay", "moderate delay"),
+    "no departure delay": ("no delay", "no delays", "on time", "no delays expected",
+                           "we are on schedule"),
+    "were running behind": ("we are running behind", "a little behind",
+                            "running a bit behind", "we are behind schedule"),
+    "atc delay": ("air traffic control delay", "delay from atc",
+                  "atc is holding us"),
+    "short arrival delay expected": ("short arrival delay expected",
+                                     "slight arrival delay"),
+    "long arrival delay expected": ("long arrival delay expected",
+                                    "big arrival delay"),
+    "no arrival delay expected": ("arriving on time", "no arrival delay"),
+    "slight enroute delay": ("small enroute delay", "slight delay enroute"),
+    "extended enroute delay": ("long enroute delay", "big enroute delay"),
+    "sorry for the delay": ("apologies for the delay", "sorry about the delay"),
+
     # --- plain answers ---------------------------------------------------
     "yes": ("yes please", "yep", "yeah", "go for it", "permission granted",
             "granted", "approved"),

@@ -113,6 +113,15 @@ _OPPOSITES = (
     frozenset({"up", "down"}),
     frozenset({"raise", "lower"}),
     frozenset({"more", "less"}),
+    # Length and timing. SLC has twenty delay buttons and several differ only
+    # by these words: "we expect a long delay" reached SHORT DELAY EXPECTED
+    # at 0.83 before they were listed here.
+    frozenset({"short", "long"}),
+    frozenset({"short", "extended"}),
+    frozenset({"brief", "extended"}),
+    frozenset({"slight", "extended"}),
+    frozenset({"early", "late"}),
+    frozenset({"departure", "arrival"}),
 )
 
 

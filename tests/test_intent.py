@@ -400,6 +400,61 @@ def test_a_weak_accept_is_a_known_limit_of_the_offline_layer(router, discourse_a
     assert decision.confidence < THRESHOLD
 
 
+#: SLC has twenty delay buttons, several differing only by a word like
+#: short/long or departure/arrival. In a flight they appear in different
+#: phases; listing them together here is the hardest case, not a typical one.
+DELAY_BUTTONS = [
+    "SORRY FOR THE DELAY", "NO DEPARTURE DELAY", "SHORT DELAY EXPECTED",
+    "WE'RE RUNNING BEHIND", "ATC DELAY", "EXTENDED DELAY EXPECTED",
+    "NO ENROUTE DELAYS", "SLIGHT ENROUTE DELAY", "EXTENDED ENROUTE DELAY",
+    "MEDIUM DELAY EXPECTED", "WE'RE RUNNING LATE", "NO ARRIVAL DELAY EXPECTED",
+    "SHORT ARRIVAL DELAY EXPECTED", "LONG ARRIVAL DELAY EXPECTED",
+    "A LITTLE DELAYED", "RUNNING LATE", "SHORT ARRIVAL DELAY", "ARRIVAL DELAY",
+    "WELCOME ABOARD", "ROGER", "BACK",
+]
+
+DELAY_TRANSCRIPTS = [
+    # Verbatim Whisper output for "mozemy spodziewac sie krotkiego opoznienia"
+    ("we can expect a short delay", "SHORT DELAY EXPECTED"),
+    ("a short delay is expected", "SHORT DELAY EXPECTED"),
+    ("extended delay expected", "EXTENDED DELAY EXPECTED"),
+    ("medium delay", "MEDIUM DELAY EXPECTED"),
+    ("we are running a bit behind", "WE'RE RUNNING BEHIND"),
+    ("air traffic control delay", "ATC DELAY"),
+    ("sorry for the delay", "SORRY FOR THE DELAY"),
+]
+
+
+@pytest.fixture(scope="module")
+def delay_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in DELAY_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", DELAY_TRANSCRIPTS)
+def test_delay_announcements_route(router, delay_actions, said, expected):
+    decision = router.decide(said, delay_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert delay_actions[decision.action_index].name == expected
+
+
+def test_a_long_delay_never_announces_a_short_one(router, delay_actions):
+    """The dangerous direction. "we expect a long delay" reached SHORT DELAY
+    EXPECTED at 0.83 until short/long joined the opposites table - announcing
+    the opposite of what the captain said to a cabin full of passengers."""
+    decision = router.decide("we expect a long delay", delay_actions)
+    if decision.action_index is not None:
+        assert delay_actions[decision.action_index].name != "SHORT DELAY EXPECTED"
+
+
+@pytest.mark.parametrize("said", ["short delay", "no delay expected"])
+def test_departure_and_arrival_variants_are_left_ambiguous(router, delay_actions,
+                                                           said):
+    """SLC offers a departure and an arrival version of several of these, and
+    a bare phrase does not say which. Refusing beats guessing - and in a real
+    flight only one of the pair is on screen anyway."""
+    assert router.decide(said, delay_actions).action_index is None
+
+
 def test_specific_key_beats_generic_one(router):
     """A button must not inherit aliases from a key it merely contains.
 
