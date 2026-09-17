@@ -138,6 +138,11 @@ class Transcriber:
                 raise
         if _NVIDIA_DLL_DIRS:
             log.debug("Registered CUDA DLL directories: %s", _NVIDIA_DLL_DIRS)
+        self._prompt = ""
+        if cfg.use_vocabulary:
+            from .vocabulary import build_prompt, load_terms
+            self._prompt = build_prompt(load_terms())
+            log.info("Whisper vocabulary hint: %d chars", len(self._prompt))
         self._warm_up()
         log.info("Whisper ready in %.1fs (%s)", time.time() - started, self._device)
 
@@ -156,7 +161,7 @@ class Transcriber:
             rng = np.random.default_rng(0)
             noise = (rng.standard_normal(self.cfg.sample_warmup_frames)
                      .astype(np.float32) * 0.05)
-            self.transcribe(noise)
+            self._transcribe(noise)
         except Exception as exc:
             log.warning("Warm-up transcription failed (%s) - continuing anyway", exc)
 
@@ -176,24 +181,35 @@ class Transcriber:
         self._device = "cpu"
         return True
 
-    def transcribe(self, audio: np.ndarray) -> tuple[str, str]:
-        """Return (text, detected_language) for a float32 mono clip."""
+    def transcribe(self, audio: np.ndarray,
+                   extra_terms: tuple[str, ...] = ()) -> tuple[str, str]:
+        """Return (text, detected_language) for a float32 mono clip.
+
+        `extra_terms` are button names SLC is showing right now - the sharpest
+        possible hint, since they are literally what the pilot might say.
+        """
         try:
-            return self._transcribe(audio)
+            return self._transcribe(audio, extra_terms)
         except Exception as exc:
             # cuBLAS/cuDNN problems surface here, not at load time. Degrade to
             # the CPU rather than failing every single utterance.
             if _is_cuda_failure(exc) and self._fall_back_to_cpu(exc):
-                return self._transcribe(audio)
+                return self._transcribe(audio, extra_terms)
             raise
 
-    def _transcribe(self, audio: np.ndarray) -> tuple[str, str]:
+    def _transcribe(self, audio: np.ndarray,
+                    extra_terms: tuple[str, ...] = ()) -> tuple[str, str]:
         started = time.time()
+        prompt = self._prompt
+        if prompt and extra_terms:
+            from .vocabulary import build_prompt, load_terms
+            prompt = build_prompt(load_terms(), extra_terms)
         segments, info = self.model.transcribe(
             audio,
             language=self.cfg.language or None,
             task=self.cfg.task,
             beam_size=self.cfg.beam_size,
+            initial_prompt=prompt or None,
             vad_filter=True,
         )
         text = " ".join(seg.text.strip() for seg in segments).strip()

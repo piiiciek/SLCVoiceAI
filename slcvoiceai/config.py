@@ -34,6 +34,11 @@ class SttConfig:
     # button names. "transcribe" keeps your own language.
     task: str = "translate"
 
+    #: Seed Whisper with the vocabulary of a cabin before it decodes. Costs
+    #: nothing and heads off literal renderings at the source - see
+    #: vocabulary.py. Edit vocabulary.txt next to config.toml to change it.
+    use_vocabulary: bool = True
+
     #: Samples of silence pushed through the model at startup to pay the CUDA
     #: first-call cost (~10s) up front rather than on the first real command.
     sample_warmup_frames: int = 16000
