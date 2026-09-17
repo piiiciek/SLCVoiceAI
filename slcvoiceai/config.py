@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,6 +51,11 @@ class GeminiConfig:
     #: plenty for picking one button off a short list.
     model: str = "gemini-3.1-flash-lite"
     fallback_model: str = "gemini-3.1-flash-lite"
+
+    #: Paste the key straight in here if you prefer. config.toml is in
+    #: .gitignore precisely so this stays out of any repository - but if you
+    #: share the file with anyone, strip it first.
+    api_key: str = ""
     api_key_env: str = "GEMINI_API_KEY"
     max_tokens: int = 512
     timeout_seconds: float = 20.0
@@ -71,6 +77,7 @@ class IntentConfig:
 @dataclass
 class LlmConfig:
     model: str = "claude-haiku-4-5"
+    api_key: str = ""
     api_key_env: str = "ANTHROPIC_API_KEY"
     max_tokens: int = 512
     timeout_seconds: float = 20.0
@@ -113,25 +120,67 @@ class Config:
     def needs_gemini_key(self) -> bool:
         return "gemini" in (self.intent.backend, self.intent.escalate_to)
 
-    @property
-    def gemini_key(self) -> str:
-        key = os.environ.get(self.gemini.api_key_env, "")
-        if not key:
-            raise RuntimeError(
-                "Environment variable {var} is not set. Get a free key at "
-                "https://aistudio.google.com/apikey then run:  setx {var} "
-                "your-key".format(var=self.gemini.api_key_env))
-        return key
+
 
     @property
     def api_key(self) -> str:
-        key = os.environ.get(self.llm.api_key_env, "")
-        if not key:
-            raise RuntimeError(
-                "Environment variable {var} is not set. Put your Anthropic API "
-                "key there, e.g.  setx {var} sk-ant-...".format(var=self.llm.api_key_env)
-            )
+        return _resolve_key(self.llm.api_key, self.llm.api_key_env, "Anthropic",
+                            "https://console.anthropic.com/")
+
+    @property
+    def gemini_key(self) -> str:
+        return _resolve_key(self.gemini.api_key, self.gemini.api_key_env, "Gemini",
+                            "https://aistudio.google.com/apikey")
+
+
+#: Shapes of the keys we hand out instructions for, used only to spot one
+#: that has been pasted somewhere it does nothing.
+_KEY_SHAPES = re.compile(r"(AIza[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,})")
+
+
+def _resolve_key(inline: str, env_var: str, service: str, signup_url: str) -> str:
+    """The key from config.toml, else the environment, else a useful error.
+
+    The error matters: the first person to configure this pasted their key
+    into the commented-out `setx` example, where TOML ignored it silently and
+    the only symptom was a window that flashed and vanished.
+    """
+    inline = (inline or "").strip()
+    if inline:
+        return inline
+    key = os.environ.get(env_var, "").strip()
+    if key:
         return key
+
+    hint = ""
+    stray = _find_stray_key()
+    if stray:
+        hint = ("\n\nThere is something shaped like an API key on line {line} "
+                "of config.toml, inside a comment - comments are ignored. Move "
+                "it to the api_key setting in that file's [{section}] section, "
+                "without the leading '#'.".format(line=stray[0], section=stray[1]))
+
+    raise RuntimeError(
+        "No {service} API key. Either set api_key in config.toml, or set the "
+        "{var} environment variable (setx {var} your-key, then open a NEW "
+        "terminal). Free key: {url}{hint}".format(
+            service=service, var=env_var, url=signup_url, hint=hint))
+
+
+def _find_stray_key(path: str | Path = "config.toml") -> tuple[int, str] | None:
+    """Line number and section of a key sitting uselessly in a comment."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    section = "?"
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped.strip("[]")
+        if stripped.startswith("#") and _KEY_SHAPES.search(stripped):
+            return number, section
+    return None
 
 
 _SECTIONS = {

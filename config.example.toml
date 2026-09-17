@@ -19,8 +19,7 @@ backend = "fuzzy"
 # "ok dzieki", phrasings no alias covers yet. That is a handful of requests
 # per flight rather than one per command, which keeps it inside a free tier.
 #
-# For "gemini", get a free key at https://aistudio.google.com/apikey then:
-#     setx GEMINI_API_KEY your-key
+# Escalation needs a key - set it in the [gemini] section further down.
 escalate_to = "none"
 
 [audio]
@@ -78,6 +77,9 @@ beam_size = 1
 [llm]
 # Only used when [intent] backend = "claude".
 model = "claude-haiku-4-5"
+
+# Paste your key here, or leave empty to use the environment variable.
+api_key = ""
 api_key_env = "ANTHROPIC_API_KEY"
 max_tokens = 512
 timeout_seconds = 20.0
@@ -88,6 +90,12 @@ timeout_seconds = 20.0
 # picking one button off a short list.
 model = "gemini-3.1-flash-lite"
 fallback_model = "gemini-3.1-flash-lite"
+
+# Paste your key between the quotes. Free one: https://aistudio.google.com/apikey
+# config.toml is in .gitignore so this stays out of any repository - but strip
+# it before sharing the file with anyone.
+# Leave empty to use the GEMINI_API_KEY environment variable instead.
+api_key = ""
 api_key_env = "GEMINI_API_KEY"
 max_tokens = 512
 timeout_seconds = 20.0
