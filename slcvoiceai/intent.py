@@ -27,6 +27,7 @@ from typing import Optional, Protocol
 
 from pydantic import BaseModel, Field
 
+from .aliases import aliases_for
 from .config import Config
 from .slc_ui import Action
 
@@ -68,6 +69,11 @@ _NOISE = {
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
 
+#: Fraction of an alias's own words that must appear in the utterance before
+#: that alias is allowed to stand in for its button. Guards against short
+#: aliases matching on one incidental shared word.
+ALIAS_MIN_COVERAGE = 0.6
+
 
 def normalise(text: str) -> str:
     """Lowercase, drop punctuation and filler, collapse whitespace.
@@ -93,6 +99,36 @@ class FuzzyRouter:
             ) from exc
         self._fuzz = fuzz
 
+    def _best_score(self, said: str, action: Action) -> float:
+        """Score against the button's own name and its registered aliases.
+
+        String similarity compares spelling, so "understood" scores near zero
+        against "ROGER" however obviously a pilot means it. The alias table
+        supplies the phrasings that carry the same intent; the best match of
+        any of them stands in for the button.
+        """
+        best = self._score(said, normalise(action.name))
+        said_tokens = set(said.split())
+        for alias in aliases_for(action.name):
+            if best >= 0.99:
+                break
+            candidate = normalise(alias)
+            if not candidate:
+                continue
+            # An alias should fire when the utterance *is* that phrase, not
+            # when it merely shares a word with it. token_set_ratio rewards
+            # subsets, so without this guard "what can i say" (which reduces
+            # to "what say") matched "what is the weather in krakow today" on
+            # the strength of "what" alone.
+            tokens = set(candidate.split())
+            coverage = len(tokens & said_tokens) / len(tokens)
+            if coverage < ALIAS_MIN_COVERAGE:
+                continue
+            score = self._score(said, candidate)
+            if score > best:
+                best = score
+        return best
+
     def _score(self, said: str, candidate: str) -> float:
         """0.0-1.0 similarity, forgiving of word order and extra words."""
         if not said or not candidate:
@@ -117,7 +153,7 @@ class FuzzyRouter:
         if not said or not actions:
             return []
         return sorted(
-            ((self._score(said, normalise(a.name)), i, a) for i, a in enumerate(actions)),
+            ((self._best_score(said, a), i, a) for i, a in enumerate(actions)),
             key=lambda t: t[0], reverse=True,
         )
 

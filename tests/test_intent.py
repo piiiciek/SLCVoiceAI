@@ -109,6 +109,51 @@ def test_chatter_is_rejected(router, actions, said):
     )
 
 
+#: Intent carried by words that share no spelling with the button. This is
+#: what the alias table exists for - "understood" against "ROGER" scores
+#: essentially zero on string similarity alone.
+SYNONYMS = [
+    ("I understand", "ROGER"),
+    ("Understood", "ROGER"),
+    ("copy that", "ROGER"),
+    ("acknowledged", "ROGER"),
+    ("say again", "REPEAT TRANSMISSION"),
+    ("never mind", "DISREGARD"),
+    ("we are ready to push", "READY FOR PUSHBACK"),
+    ("thanks a lot", "THANK YOU"),
+]
+
+#: Buttons SLC shows once a channel is open, needed for the synonym cases.
+COMMS_BUTTONS = SLC_BUTTONS + [
+    "ROGER", "GO AHEAD", "DISREGARD", "THANK YOU", "READY FOR PUSHBACK",
+    "REPEAT TRANSMISSION", "LOUD AND CLEAR",
+]
+
+
+@pytest.fixture(scope="module")
+def comms_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in COMMS_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", SYNONYMS)
+def test_synonyms_route_through_aliases(router, comms_actions, said, expected):
+    decision = router.decide(said, comms_actions)
+    assert decision.action_index is not None, "declined a synonym: " + said
+    assert decision.confidence >= THRESHOLD
+    assert comms_actions[decision.action_index].name == expected
+
+
+@pytest.mark.parametrize("said", NOT_COMMANDS)
+def test_chatter_still_rejected_with_aliases(router, comms_actions, said):
+    """Aliases widen the matching surface - make sure they did not widen it
+    onto radio chatter. "what can i say" reduces to "what say", which matched
+    "what is the weather in krakow today" until alias coverage was required."""
+    decision = router.decide(said, comms_actions)
+    fired = decision.action_index is not None and decision.confidence >= THRESHOLD
+    assert not fired, "would have pressed {n!r} on {s!r}".format(
+        n=comms_actions[decision.action_index].name, s=said)
+
+
 def test_empty_action_list_declines(router):
     assert router.decide("intercom", []).action_index is None
 

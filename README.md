@@ -142,8 +142,23 @@ same card. Whisper's `translate` task turns your Polish into English first, so
 the matching happens against SLC's own English button names.
 
 It handles anything close to the button's wording — *"połącz mnie z obsługą
-naziemną"* → `GROUND CREW >`, *"pasy bezpieczeństwa"* → `Seatbelts`. It will not
-handle genuinely indirect phrasing like *"tell them we're good to push"*.
+naziemną"* → `GROUND CREW >`, *"pasy bezpieczeństwa"* → `Seatbelts`.
+
+Pure string similarity cannot bridge a synonym, though: *"zrozumiałem"* comes
+back from Whisper as *"I understand"*, which shares no letters at all with
+`ROGER`. `aliases.py` closes that gap with a curated table of aviation
+phraseology — understood / copy that / acknowledged all reach `ROGER`, say again
+reaches `REPEAT TRANSMISSION`, never mind reaches `DISREGARD`. Add your own
+there; each entry is scored alongside the button's real name.
+
+An alias only fires when the utterance actually contains most of its words
+(`ALIAS_MIN_COVERAGE`). Without that guard the alias *"what can i say"* — which
+reduces to *"what say"* — matched *"what is the weather in Krakow today"* on the
+strength of one shared word.
+
+What it still will not handle is genuinely indirect phrasing with no shared
+vocabulary at all, like *"tell them we're good to push"* when no alias covers
+it. That is what the `claude` backend is for.
 
 **`claude`** — the Anthropic API, which does handle indirect phrasing, and can
 use flight context to disambiguate. Costs roughly a third of a grosz per
@@ -159,9 +174,14 @@ you actually speak.
 
 ### The control panel
 
+Double-click **`SLCVoiceAI.bat`** — or, from a terminal:
+
 ```bash
 python -m slcvoiceai --gui
 ```
+
+(`SLCVoiceAI-console.bat` runs the same panel but keeps a console window, so
+startup errors stay visible if the silent launcher does nothing.)
 
 A small always-on-top window that sits beside the simulator and answers,
 without opening a log file: is it listening and on which device, what did it
@@ -228,6 +248,7 @@ slcvoiceai/
   context.py    optional flight context from SLC's stream export
   config.py     config.toml loading
   gui.py        tkinter control panel (--gui)
+  aliases.py    synonym table for aviation phraseology
 tools/
   probe_slc.py  standalone UIA diagnostic
 tests/
