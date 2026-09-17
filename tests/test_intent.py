@@ -222,9 +222,10 @@ def test_short_alias_cannot_claim_a_long_utterance(router, opposite_actions):
 
 #: Buttons SLC showed during a real boarding sequence.
 BOARDING_BUTTONS = SLC_BUTTONS + [
+    "YES", "NO", "HELLO?",
     "START BOARDING WHEN READY", "YES, START BOARDING", "REQUEST LOADING UPDATE",
     "REQUEST OFFLOADING UPDATE", "YES, START LOADING", "GSX, START BOARDING",
-    "GSX, START CATERING", "CONNECT JETWAY", "DISCONNECT JETWAY", "HELLO?",
+    "GSX, START CATERING", "CONNECT JETWAY", "DISCONNECT JETWAY",
 ]
 
 #: Verbatim Whisper output captured in use. Polish "ladowac" means both
@@ -252,11 +253,31 @@ def test_real_transcripts_route(router, boarding_actions, said, expected):
     assert boarding_actions[decision.action_index].name == expected
 
 
-def test_charging_alias_does_not_catch_small_talk(router, boarding_actions):
-    """"charging" now reaches the loading buttons - it must not reach them
-    from a sentence about a phone battery."""
-    decision = router.decide("my phone battery is charging", boarding_actions)
-    assert decision.action_index is None
+#: Sentences that merely contain a one-word button's name. token_set_ratio
+#: scores a subset as perfect, so each of these fired its button at 1.00.
+INCIDENTAL_WORDS = [
+    "my phone battery is charging",
+    "yes we should go back to the gate",
+    "no idea what the settings are",
+    "i will call you back later tonight",
+]
+
+
+@pytest.mark.parametrize("said", INCIDENTAL_WORDS)
+def test_one_word_buttons_need_more_than_one_shared_word(router, boarding_actions, said):
+    decision = router.decide(said, boarding_actions)
+    assert decision.action_index is None, "fired {n!r} on {s!r}".format(
+        n=boarding_actions[decision.action_index].name, s=said)
+
+
+@pytest.mark.parametrize("said,expected", [
+    ("phone", "PHONE >"), ("back", "BACK"), ("hello", "HELLO?"),
+])
+def test_one_word_commands_still_work(router, boarding_actions, said, expected):
+    """The damping must not cost us the short commands themselves."""
+    decision = router.decide(said, boarding_actions)
+    assert decision.action_index is not None
+    assert boarding_actions[decision.action_index].name == expected
 
 
 def test_empty_action_list_declines(router):
