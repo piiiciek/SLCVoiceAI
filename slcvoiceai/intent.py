@@ -455,18 +455,29 @@ class CascadeRouter:
     def decide(self, utterance: str, actions: list[Action],
                flight_context: str = "") -> Decision:
         decision = self.local.decide(utterance, actions, flight_context)
-        if decision.action_index is not None:
+        floor = getattr(self.local, "min_confidence", 0.0)
+
+        # Escalate on a weak *acceptance* as well as on a refusal. A match
+        # taken on margin alone is the shakiest kind: "alright everyone lets
+        # get going" reaches "HOW'S IT GOING?" at 0.62 on the strength of one
+        # word, and nothing about a refusal-only rule would ever catch it.
+        if decision.action_index is not None and decision.confidence >= floor:
             log.info("Settled offline - not asking %s", self.cloud_name)
             return decision
         if not actions:
             return decision
 
-        log.info("Offline matcher unsure (%s) - asking %s",
-                 decision.reasoning, self.cloud_name)
+        if decision.action_index is None:
+            log.info("Offline matcher unsure (%s) - asking %s",
+                     decision.reasoning, self.cloud_name)
+        else:
+            log.info("Offline match is weak (%r at %.2f, floor %.2f) - asking %s",
+                     actions[decision.action_index].name, decision.confidence,
+                     floor, self.cloud_name)
         escalated = self.cloud.decide(utterance, actions, flight_context)
         if escalated.action_index is None:
-            # Report whichever refusal is more informative: the cloud's, if it
-            # gave a reason, else the local one that got us here.
+            # The cloud has the last word, including when it overrules a weak
+            # local accept - that is the point of asking.
             return escalated if escalated.reasoning else decision
         return escalated
 

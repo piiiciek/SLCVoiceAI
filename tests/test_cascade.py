@@ -77,6 +77,42 @@ def test_unsettled_utterance_escalates(cascade, cloud, actions):
     assert decision.action_index == 2
 
 
+class StubLocal:
+    """A local matcher with a fixed verdict, so the cascade's own rules are
+    what is under test rather than whatever the fuzzy scores happen to be."""
+
+    min_confidence = 0.65
+
+    def __init__(self, decision: Decision):
+        self.decision = decision
+
+    def decide(self, utterance, actions, flight_context=""):
+        return self.decision
+
+
+def test_weak_accept_is_escalated_too(cloud, actions):
+    """A match taken on margin alone is the shakiest kind - it should get a
+    second opinion, not a free pass.
+
+    "alright everyone lets get going" reaches "HOW'S IT GOING?" at 0.62 on
+    one shared word. Escalating only on refusals would never catch that.
+    """
+    local = StubLocal(Decision(action_index=0, confidence=0.62,
+                               reasoning="decisive margin, weak score"))
+    cascade = CascadeRouter(local, cloud, "gemini")
+    cascade.decide("alright everyone lets get going", actions)
+    assert cloud.calls == 1
+
+
+def test_confident_accept_at_the_floor_is_not_escalated(cloud, actions):
+    local = StubLocal(Decision(action_index=0, confidence=0.65,
+                               reasoning="exactly at the floor"))
+    cascade = CascadeRouter(local, cloud, "gemini")
+    decision = cascade.decide("roger", actions)
+    assert cloud.calls == 0
+    assert decision.action_index == 0
+
+
 def test_no_buttons_means_no_request(cascade, cloud):
     """Nothing to choose between is not a question worth paying for."""
     assert cascade.decide("roger", []).action_index is None
