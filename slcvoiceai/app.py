@@ -9,7 +9,7 @@ import time
 from .config import Config
 from .context import format_context, read_flight_context
 from .intent import build_router
-from .slc_ui import SlcUI
+from .slc_ui import SlcUI, UIAUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -58,13 +58,16 @@ class Bridge:
             log.info("Nothing intelligible in that clip.")
             return
 
-        if not self.ui.is_running():
-            log.warning("Heard %r but SLC is not running.", text)
+        try:
+            actions = self.ui.list_actions()
+        except UIAUnavailable as exc:
+            log.error("Heard %r but %s - command dropped, please say it again.",
+                      text, exc)
             return
 
-        actions = self.ui.list_actions()
         if not actions:
-            log.warning("Heard %r but SLC is offering no buttons right now.", text)
+            log.warning("Heard %r but SLC is offering no buttons right now "
+                        "(is it running, and in a flight?).", text)
             return
         log.info("SLC is offering %d action(s): %s",
                  len(actions), ", ".join(a.name for a in actions[:12]))

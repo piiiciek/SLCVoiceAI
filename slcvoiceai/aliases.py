@@ -75,6 +75,15 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "parking brake is set": ("brakes set", "brake is on", "brakes on"),
     "ready to go now": ("we are ready", "ready now", "lets go", "good to go"),
 
+    # --- engines and APU -------------------------------------------------
+    "starting the apu": ("start the apu", "we are ready to start the apu",
+                         "apu start", "ready for apu", "fire up the apu",
+                         "starting apu"),
+    "hotel startup": ("hotel mode", "start hotel mode"),
+    "please disconnect gpu": ("disconnect the gpu", "remove ground power",
+                              "gpu off", "we dont need ground power"),
+    "single engine taxi": ("one engine taxi", "taxi on one engine"),
+
     # --- cabin -----------------------------------------------------------
     "release the cabin crew": ("crew can move", "crew are free",
                                "you can move around", "free to move about",

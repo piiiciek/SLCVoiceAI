@@ -30,21 +30,22 @@ max_seconds = 20.0
 min_seconds = 0.35      # ignore accidental taps of the PTT key
 
 [stt]
-# faster-whisper model. "small" is the default for a reason: MSFS 2024 uses
-# almost all of a 16 GB card, and large-v3 then fights it for the last few
-# hundred MB. Measured with the simulator running, per command:
+# faster-whisper model and quantisation. Measured on Polish speech with MSFS
+# running and the GPU at 92%, translating "polacz mnie z obsluga naziemna":
 #
-#   small    on cuda   0.96s      <- default
-#   large-v3 on cuda    2.25s, spiking to 92s under memory pressure
-#   base     on cpu     1.64s
-#   small    on cpu     5.38s
-#   medium   on cpu    16.29s
+#   large-v3  int8      1897 MB  1.61s  "Connect me with ground service."
+#   large-v3  float16   2777 MB  1.40s  "Connect me with ground service."
+#   medium    int8      1070 MB  1.25s  "Join me with a ground service."
+#   small     float16   ~500 MB  0.44s  "Connect me with the service to the earth"
 #
-# All of them transcribed the test phrase correctly. large-v3 is better at
-# Polish, so raise it if your GPU has room; drop to "base" if it does not.
-model = "small"
-device = "cuda"          # "cpu" also works, just slower
-compute_type = "float16" # use "int8" when device = "cpu"
+# small is quick but translates Polish literally, which is why speaking
+# English to it feels better. large-v3 at int8 keeps the good translation and
+# uses a third less memory than float16 - and memory, not speed, is what
+# caused 90-second stalls when the simulator had the card. Drop to "medium"
+# if yours is tighter still.
+model = "large-v3"
+device = "cuda"          # "cpu" works but is markedly slower here
+compute_type = "int8"    # "float16" if you have VRAM to spare
 
 # "translate" makes Whisper emit English no matter what you speak - this is
 # what lets you talk Polish to a program whose buttons are all in English.

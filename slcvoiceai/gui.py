@@ -23,7 +23,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .config import Config
-from .slc_ui import SlcUI
+from .slc_ui import SlcUI, UIAUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -211,6 +211,10 @@ class App:
             else:
                 self._actions = []
                 names = ["(SLC is not running)"]
+        except UIAUnavailable:
+            # Transient; keep showing the last good list rather than blanking
+            # the panel every time a COM call hiccups.
+            names = list(self.actions_box.get(0, "end")) or ["(UI scan failed, retrying)"]
         except Exception as exc:
             self._actions = []
             names = ["(scan failed: {e})".format(e=exc)]

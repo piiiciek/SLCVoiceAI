@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import time
 from ctypes import wintypes
 from dataclasses import dataclass
 
@@ -55,6 +56,16 @@ WINDOW_DENYLIST = (
     "voice recognition prompt window",
     "audio manager",
 )
+
+
+class UIAUnavailable(RuntimeError):
+    """The UI Automation tree could not be read this time.
+
+    Distinct from "SLC is offering nothing": one is a failed read, the other
+    is a real answer. Reporting a failed read as an empty result loses
+    commands silently, which is exactly how "Please repeat." vanished with
+    nothing in the log but a misleading "no buttons right now".
+    """
 
 
 def is_denied_window(title: str) -> bool:
@@ -227,19 +238,38 @@ class SlcUI:
         self.max_depth = max_depth
 
     def is_running(self) -> bool:
-        return bool(self.windows())
-
-    def windows(self) -> list:
-        found = []
         try:
-            root = auto.GetRootControl()
-            for win in root.GetChildren():
-                pid = getattr(win, "ProcessId", 0)
-                if pid and _process_name(pid).lower() == self.process_name.lower():
-                    found.append(win)
-        except Exception as exc:
-            log.error("Could not enumerate windows: %s", exc)
-        return found
+            return bool(self.windows())
+        except UIAUnavailable:
+            return False
+
+    def windows(self, attempts: int = 3) -> list:
+        """Top-level windows owned by SLC.
+
+        UIA occasionally fails a whole enumeration with a transient COM error
+        (EVENT_E_ALL_SUBSCRIBERS_FAILED and friends) even though SLC is
+        running normally. Retrying costs milliseconds and almost always
+        succeeds; treating the first failure as "nothing is there" silently
+        drops whatever the pilot just said.
+        """
+        last: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                found = []
+                root = auto.GetRootControl()
+                for win in root.GetChildren():
+                    pid = getattr(win, "ProcessId", 0)
+                    if pid and _process_name(pid).lower() == self.process_name.lower():
+                        found.append(win)
+                if attempt:
+                    log.info("UI scan recovered on attempt %d", attempt + 1)
+                return found
+            except Exception as exc:
+                last = exc
+                log.debug("UI scan attempt %d failed: %s", attempt + 1, exc)
+                time.sleep(0.15 * (attempt + 1))
+        raise UIAUnavailable(
+            "could not read SLC's UI after {n} attempts: {e}".format(n=attempts, e=last))
 
     def list_actions(self, include_disabled: bool = False,
                      include_hidden: bool = False) -> list[Action]:
