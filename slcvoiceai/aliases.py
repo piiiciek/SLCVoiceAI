@@ -15,6 +15,8 @@ Values are scored alongside the button name; the best score wins.
 
 from __future__ import annotations
 
+import re
+
 ALIASES: dict[str, tuple[str, ...]] = {
     # --- acknowledgement -------------------------------------------------
     "roger": ("understood", "i understand", "copy", "copy that", "got it",
@@ -64,6 +66,20 @@ ALIASES: dict[str, tuple[str, ...]] = {
                        "we need a jetway"),
     "connect stairs": ("attach the stairs", "bring the stairs", "stairs please",
                        "we need stairs"),
+    "disconnect jetway": ("remove the jetway", "take the jetway away",
+                          "detach the jetway", "jetway away",
+                          "we are done with the jetway"),
+    "disconnect stairs": ("remove the stairs", "take the stairs away",
+                          "detach the stairs", "stairs away"),
+
+    # --- GSX services ----------------------------------------------------
+    "start catering": ("send the catering", "catering please", "we need catering",
+                       "bring the catering", "let the catering come",
+                       "catering to the aircraft"),
+    "start refuelling": ("start fuelling", "we need fuel", "refuel the aircraft",
+                         "send the fuel truck", "begin refuelling"),
+    "start deboarding": ("start disembarking", "let them off", "begin deboarding"),
+    "start deicing": ("de ice the aircraft", "we need deicing", "begin deicing"),
 
     # --- departure -------------------------------------------------------
     "ready for pushback": ("ready to push", "we can push", "request pushback",
@@ -127,12 +143,32 @@ ALIASES: dict[str, tuple[str, ...]] = {
 def aliases_for(button_name: str) -> tuple[str, ...]:
     """Every alias phrase registered for this button name.
 
-    Longest key first so that a specific entry ("ready to start boarding")
+    Matched on whole words, not raw substrings. "connect jetway" is literally
+    a substring of "disconnect jetway", so substring matching handed every
+    connect alias to the disconnect button and made the two indistinguishable
+    - the exact confusion these opposites must never have.
+
+    Longest key first, so a specific entry ("ready to start boarding")
     contributes before a generic one ("start boarding") when both apply.
     """
-    low = button_name.strip().lower()
+    words = _words(button_name)
     out: list[str] = []
     for key in sorted(ALIASES, key=len, reverse=True):
-        if key in low:
+        if _contains_sequence(words, _words(key)):
             out.extend(ALIASES[key])
     return tuple(out)
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z0-9]+", text.lower()) if w]
+
+
+def _contains_sequence(haystack: list[str], needle: list[str]) -> bool:
+    """Do `needle`'s words appear consecutively in `haystack`?"""
+    if not needle or len(needle) > len(haystack):
+        return False
+    first = needle[0]
+    for i in range(len(haystack) - len(needle) + 1):
+        if haystack[i] == first and haystack[i:i + len(needle)] == needle:
+            return True
+    return False

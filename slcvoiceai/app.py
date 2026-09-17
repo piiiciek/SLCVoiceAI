@@ -79,12 +79,6 @@ class Bridge:
             log.info("Declined: %s", decision.reasoning)
             return
 
-        if decision.confidence < self.cfg.behaviour.min_confidence:
-            log.info("Below confidence floor (%.2f < %.2f), ignoring: %s",
-                     decision.confidence, self.cfg.behaviour.min_confidence,
-                     decision.reasoning)
-            return
-
         action = actions[decision.action_index]
         elapsed = time.time() - started
 

@@ -74,6 +74,62 @@ _PUNCT = re.compile(r"[^a-z0-9 ]+")
 #: aliases matching on one incidental shared word.
 ALIAS_MIN_COVERAGE = 0.6
 
+#: A decisive win can stand in for a high score. Chatter does not merely score
+#: low, it scores low *against everything* - measured over a dozen ATC and
+#: small-talk phrases, the gap between first and second place never exceeded
+#: 0.08, while genuine commands cleared 0.16. So a clear winner above
+#: RELAXED_FLOOR is accepted even below min_confidence.
+RELAXED_FLOOR = 0.55
+DECISIVE_MARGIN = 0.12
+
+#: What a polarity conflict does to a score. Low enough to lose decisively.
+POLARITY_PENALTY = 0.45
+
+#: Prefixes that invert a word's meaning. "disconnect jetway" and "connect
+#: jetway" are one character apart for a string matcher and exact opposites
+#: to a pilot, so they must never be treated as near-identical.
+_NEGATING_PREFIXES = ("dis", "un", "de", "non")
+
+#: Opposites that are not formed by prefixing.
+_OPPOSITES = (
+    frozenset({"open", "close"}),
+    frozenset({"start", "stop"}),
+    frozenset({"on", "off"}),
+    frozenset({"arm", "disarm"}),
+    frozenset({"yes", "no"}),
+    frozenset({"connect", "remove"}),
+    frozenset({"attach", "detach"}),
+)
+
+
+def _negated_stems(tokens: set[str]) -> set[str]:
+    """Stems that appear in negated form, e.g. {"connect"} for "disconnect"."""
+    stems = set()
+    for token in tokens:
+        for prefix in _NEGATING_PREFIXES:
+            if token.startswith(prefix) and len(token) > len(prefix) + 2:
+                stems.add(token[len(prefix):])
+    return stems
+
+
+def polarity_conflict(said_tokens: set[str], candidate_tokens: set[str]) -> bool:
+    """Do these two say opposite things about the same subject?
+
+    True when one negates a word the other asserts plainly ("disconnect
+    jetway" vs "connect jetway"), or when they hold two halves of a known
+    opposite pair ("open the doors" vs "close the doors").
+    """
+    if _negated_stems(said_tokens) & candidate_tokens:
+        return True
+    if _negated_stems(candidate_tokens) & said_tokens:
+        return True
+    for pair in _OPPOSITES:
+        said_side = pair & said_tokens
+        cand_side = pair & candidate_tokens
+        if said_side and cand_side and said_side != cand_side:
+            return True
+    return False
+
 
 def normalise(text: str) -> str:
     """Lowercase, drop punctuation and filler, collapse whitespace.
@@ -107,8 +163,9 @@ class FuzzyRouter:
         supplies the phrasings that carry the same intent; the best match of
         any of them stands in for the button.
         """
-        best = self._score(said, normalise(action.name))
         said_tokens = set(said.split())
+        name = normalise(action.name)
+        best = self._score(said, name)
         for alias in aliases_for(action.name):
             if best >= 0.99:
                 break
@@ -127,6 +184,14 @@ class FuzzyRouter:
             score = self._score(said, candidate)
             if score > best:
                 best = score
+
+        # Penalise the action as a whole, after aliases, not each candidate
+        # string. Otherwise a neutral alias routes around the check: "jetway
+        # please" is registered for CONNECT JETWAY and carries no polarity of
+        # its own, so it scored "disconnect jetway" just as highly as the
+        # correct button and the two tied.
+        if polarity_conflict(said_tokens, set(name.split())):
+            best *= POLARITY_PENALTY
         return best
 
     def _score(self, said: str, candidate: str) -> float:
@@ -171,20 +236,37 @@ class FuzzyRouter:
         # A clear winner matters as much as a high score. Two buttons scoring
         # 0.80 and 0.79 means we are guessing, not matching.
         margin = best_score - runner_up
-        if best_score >= self.min_confidence and margin < 0.05:
+        log.info("Fuzzy best: %r %.2f (runner-up %r %.2f, margin %.2f)",
+                 best_action.name, best_score,
+                 scored[1][2].name if len(scored) > 1 else "-", runner_up, margin)
+
+        # Two candidates within a whisker of each other means guessing, not
+        # matching - and when they are opposites ("connect" / "disconnect"
+        # jetway) guessing is actively dangerous.
+        if margin < 0.05:
             return Decision(
                 confidence=best_score,
                 reasoning="Ambiguous: {a!r} and {b!r} score almost the same.".format(
                     a=best_action.name, b=scored[1][2].name),
             )
 
-        log.info("Fuzzy best: %r %.2f (runner-up %r %.2f)",
-                 best_action.name, best_score, scored[1][2].name if len(scored) > 1 else "-",
-                 runner_up)
+        # A decisive win counts for as much as a high score. "Let the catering
+        # come" scored 0.64 against GSX, START CATERING with the runner-up on
+        # 0.48 - obviously right, and refused for want of 0.01.
+        decisive = best_score >= RELAXED_FLOOR and margin >= DECISIVE_MARGIN
+        if best_score < self.min_confidence and not decisive:
+            return Decision(
+                confidence=best_score,
+                reasoning="Too weak a match for {name!r} ({s:.2f}).".format(
+                    name=best_action.name, s=best_score),
+            )
+
         return Decision(
             action_index=best_index,
             confidence=best_score,
-            reasoning="Closest match to {name!r}.".format(name=best_action.name),
+            reasoning="{how} match to {name!r}.".format(
+                how="Decisive" if decisive and best_score < self.min_confidence
+                else "Closest", name=best_action.name),
         )
 
 

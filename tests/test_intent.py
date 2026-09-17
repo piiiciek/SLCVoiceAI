@@ -154,6 +154,59 @@ def test_chatter_still_rejected_with_aliases(router, comms_actions, said):
         n=comms_actions[decision.action_index].name, s=said)
 
 
+#: Buttons that are exact opposites of each other. These share nearly every
+#: letter, so a string matcher rates them near-identical - the most dangerous
+#: confusion in the whole set.
+OPPOSITE_BUTTONS = [
+    "CONNECT JETWAY", "DISCONNECT JETWAY",
+    "CONNECT STAIRS", "DISCONNECT STAIRS",
+    "OPEN THE DOORS", "PLEASE CLOSE THE DOORS",
+    "GSX, START CATERING", "GSX, START BOARDING",
+    "ROGER", "GO AHEAD", "BACK",
+]
+
+OPPOSITES = [
+    ("Disconnect Jetway.", "DISCONNECT JETWAY"),
+    ("Connect Jetway.", "CONNECT JETWAY"),
+    ("attach the jetway", "CONNECT JETWAY"),
+    ("remove the jetway", "DISCONNECT JETWAY"),
+    ("Disconnect the stairs", "DISCONNECT STAIRS"),
+    ("bring the stairs", "CONNECT STAIRS"),
+    ("open the doors", "OPEN THE DOORS"),
+    ("close the doors", "PLEASE CLOSE THE DOORS"),
+]
+
+
+@pytest.fixture(scope="module")
+def opposite_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in OPPOSITE_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", OPPOSITES)
+def test_opposites_are_not_confused(router, opposite_actions, said, expected):
+    """connect/disconnect must never be mistaken for one another.
+
+    Two bugs made them indistinguishable: string similarity rates them
+    near-identical, and aliases_for matched keys as raw substrings, so
+    "connect jetway" (a literal substring of "disconnect jetway") handed
+    every connect alias to the disconnect button as well.
+    """
+    decision = router.decide(said, opposite_actions)
+    assert decision.action_index is not None, "declined an opposite: " + said
+    assert opposite_actions[decision.action_index].name == expected
+
+
+def test_decisive_margin_accepts_a_clear_but_low_score(router, opposite_actions):
+    """A decisive win stands in for a high score.
+
+    "Let the catering come" scored 0.64 with the runner-up on 0.48 - obviously
+    right, and refused for want of 0.01 against a flat floor.
+    """
+    decision = router.decide("Let the catering come.", opposite_actions)
+    assert decision.action_index is not None
+    assert opposite_actions[decision.action_index].name == "GSX, START CATERING"
+
+
 def test_empty_action_list_declines(router):
     assert router.decide("intercom", []).action_index is None
 
