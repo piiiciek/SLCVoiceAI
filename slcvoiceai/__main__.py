@@ -65,20 +65,24 @@ def main(argv: list[str] | None = None) -> int:
                 i=i, name=action.name, ctype=action.control_type, win=action.window))
         return 0
 
-    # Fail fast with a clear message rather than mid-flight.
-    for needed, fetch in ((cfg.needs_api_key, lambda: cfg.api_key),
-                          (cfg.needs_gemini_key, lambda: cfg.gemini_key)):
-        if not needed:
-            continue
+    if args.gui:
+        # No pre-flight key check here: the panel is the interface, and it
+        # reports problems in its own activity feed. Exiting before the window
+        # opens is invisible under pythonw - it looks like a flash and
+        # nothing else.
+        from .gui import run as run_gui
+        return run_gui(cfg)
+
+    # Headless: fail fast on a missing key for the *primary* backend only.
+    # A missing escalation key degrades to local matching instead.
+    backend = cfg.intent.backend.strip().lower()
+    fetchers = {"claude": lambda: cfg.api_key, "gemini": lambda: cfg.gemini_key}
+    if backend in fetchers:
         try:
-            fetch()
+            fetchers[backend]()
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-
-    if args.gui:
-        from .gui import run as run_gui
-        return run_gui(cfg)
 
     return Bridge(cfg).run()
 

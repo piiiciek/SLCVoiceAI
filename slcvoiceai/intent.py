@@ -483,6 +483,16 @@ def build_router(cfg: Config) -> Router:
         log.info("Intent backend: %s", backend)
         return local
 
+    try:
+        cloud = _build_single(escalate, cfg)
+    except (RuntimeError, ValueError) as exc:
+        # Escalation is an enhancement, not a requirement: the offline layer
+        # answers most commands on its own. Refusing to start over a missing
+        # key would take away everything that does work.
+        log.warning("Escalation to %s is unavailable (%s) - carrying on with "
+                    "%s alone", escalate, exc, backend)
+        return local
+
     log.info("Intent pipeline: %s offline, escalating to %s when unsure",
              backend, escalate)
-    return CascadeRouter(local, _build_single(escalate, cfg), escalate)
+    return CascadeRouter(local, cloud, escalate)
