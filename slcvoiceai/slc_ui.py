@@ -39,7 +39,27 @@ DENYLIST = (
     "close window",
     "delete",
     "reset",
+    # Settings-window commit buttons, in case a config window slips through.
+    "save changes and close",
+    "apply changes",
 )
+
+#: Windows that are configuration or meta UI rather than flight controls.
+#: Matched case-insensitively as substrings of the window title.
+#:
+#: Deliberately a denylist, not an allowlist: SLC puts genuinely voice-worthy
+#: controls in several satellite windows (doors, tannoy, cabin management),
+#: and an allowlist would silently cut them off.
+WINDOW_DENYLIST = (
+    "settings window",
+    "voice recognition prompt window",
+    "audio manager",
+)
+
+
+def is_denied_window(title: str) -> bool:
+    low = (title or "").strip().lower()
+    return any(bad in low for bad in WINDOW_DENYLIST)
 
 
 @dataclass
@@ -236,6 +256,9 @@ class SlcUI:
 
         for win in self.windows():
             win_name = win.Name or "(untitled)"
+            if is_denied_window(win_name):
+                log.debug("Skipping configuration window %r", win_name)
+                continue
             for ctl in self._walk(win):
                 try:
                     if not _is_activatable(ctl):
