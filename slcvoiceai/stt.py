@@ -131,8 +131,13 @@ class Transcriber:
         falls back before anyone is mid-flight.
         """
         try:
-            silence = np.zeros(self.cfg.sample_warmup_frames, dtype=np.float32)
-            self.transcribe(silence)
+            # Low-level noise, not silence: the VAD filter strips pure zeros
+            # before they ever reach the encoder, so a silent warm-up warms
+            # nothing and the first real command still pays the full ~7s.
+            rng = np.random.default_rng(0)
+            noise = (rng.standard_normal(self.cfg.sample_warmup_frames)
+                     .astype(np.float32) * 0.05)
+            self.transcribe(noise)
         except Exception as exc:
             log.warning("Warm-up transcription failed (%s) - continuing anyway", exc)
 

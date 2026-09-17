@@ -97,15 +97,14 @@ class FuzzyRouter:
         """0.0-1.0 similarity, forgiving of word order and extra words."""
         if not said or not candidate:
             return 0.0
-        fuzz = self._fuzz
-        # token_set_ratio ignores word order and duplicated words; partial_ratio
-        # rewards the command being a substring of a longer button name. Taking
-        # the best of the two handles both "pushback" -> "READY FOR PUSHBACK"
-        # and "ready for pushback now" -> "READY FOR PUSHBACK".
-        return max(
-            fuzz.token_set_ratio(said, candidate),
-            fuzz.partial_ratio(said, candidate),
-        ) / 100.0
+        # token_set_ratio only, deliberately. Combining it with partial_ratio
+        # (the obvious "take whichever is higher") destroys the signal:
+        # partial_ratio scores ATC chatter like "tower london zero two" at 0.71
+        # against real buttons - as high as a genuine command - so the max()
+        # drags noise up to the level of intent. Measured on real Whisper
+        # output, token_set_ratio alone separates by 0.21 where the
+        # combination separated by 0.02.
+        return self._fuzz.token_set_ratio(said, candidate) / 100.0
 
     def decide(self, utterance: str, actions: list[Action],
                flight_context: str = "") -> Decision:

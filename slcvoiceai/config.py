@@ -60,7 +60,7 @@ class SlcConfig:
 
 @dataclass
 class BehaviourConfig:
-    min_confidence: float = 0.80
+    min_confidence: float = 0.65
     dry_run: bool = False
     speak_feedback: bool = False
     log_file: str = "slcvoiceai.log"

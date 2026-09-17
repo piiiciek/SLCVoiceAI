@@ -29,11 +29,16 @@ SLC_BUTTONS = [
 ]
 
 #: The shipped default. Chosen by sweeping thresholds against the two sets
-#: below: 0.75-0.85 separates them cleanly, 0.80 sits in the middle.
-THRESHOLD = 0.80
+#: below: with token_set_ratio alone, 0.50-0.70 separates them cleanly.
+#: 0.65 sits inside that band with margin on both sides.
+THRESHOLD = 0.65
 
 #: Whisper's `translate` output for Polish commands, and the button meant.
 COMMANDS = [
+    # Real Whisper `translate` output for "polacz mnie z obsluga naziemna".
+    # Nothing like the tidy phrase that was originally assumed, which is why
+    # the first threshold was tuned too high and rejected a correct match.
+    ("Let's start with the ground operation.", "GROUND CREW >"),
     ("connect me with the ground crew", "GROUND CREW >"),
     ("give me ground crew", "GROUND CREW >"),
     ("intercom", "INTERCOM >"),

@@ -65,15 +65,17 @@ stream_export_dir = ""
 [behaviour]
 # Below this confidence the bridge does nothing rather than guess.
 #
-# 0.80 is tuned for the fuzzy backend and matters more than it looks: fuzzy
-# matching always finds a nearest neighbour, so without a high floor, ATC
-# chatter lands on a cabin command. "tower london zero two" scored 0.60
-# against "PHONE >". Sweeping thresholds against real SLC buttons, 0.75-0.85
-# separates genuine commands from chatter cleanly; see tests/test_intent.py.
+# Fuzzy matching always finds a *nearest* neighbour, so this floor is what
+# stops radio chatter from landing on a cabin command. Tuned against real
+# Whisper output plus a set of things pilots say that are not SLC commands:
+# 0.50-0.70 separates them cleanly, so 0.65 sits mid-band. See
+# tests/test_intent.py, which locks both directions in.
 #
-# If you switch to backend = "claude", drop this to about 0.55 - that model
-# reports calibrated confidence and declines on its own.
-min_confidence = 0.80
+# Raise it if you get misfires, lower it if genuine commands get ignored -
+# the log prints the score of every near miss, so tune from real numbers.
+# On backend = "claude" this can go lower (~0.55); that model reports
+# calibrated confidence and declines on its own.
+min_confidence = 0.65
 
 # true = decide and log, but never actually press anything. Start here.
 dry_run = false
