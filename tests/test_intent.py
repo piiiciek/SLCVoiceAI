@@ -280,6 +280,56 @@ def test_one_word_commands_still_work(router, boarding_actions, said, expected):
     assert boarding_actions[decision.action_index].name == expected
 
 
+#: Cabin-crew buttons, several of which contain each other's words.
+CABIN_BUTTONS = [
+    "GROUND CREW >", "INTERCOM >", "P A SYSTEM >", "PHONE >",
+    "PURSER TO INTERCOM", "CABIN CREW TO INTERCOM", "THAT'S PERFECT",
+    "HOW'S IT GOING?", "HOW ARE THE PASSENGERS?", "TURN THE MUSIC UP",
+    "TURN THE MUSIC DOWN", "UP A BIT MORE", "DOWN A BIT MORE", "ROGER", "BACK",
+    "Inflight Services", "Settings", "Check List",
+]
+
+#: More verbatim Whisper output. "moze byc" arrives as "it can be";
+#: "jak leci" as "how does it go"; "stewardesa" as "stewardess", a word on
+#: no SLC button at all.
+CABIN_TRANSCRIPTS = [
+    ("It can be. Super.", "THAT'S PERFECT"),
+    ("Great, it can be done.", "THAT'S PERFECT"),
+    ("How does it go?", "HOW'S IT GOING?"),
+    ("Call the stewardess.", "INTERCOM >"),
+    ("Turn up the music.", "TURN THE MUSIC UP"),
+    ("A little bit more.", "UP A BIT MORE"),
+    ("intercom", "INTERCOM >"),
+    ("purser", "PURSER TO INTERCOM"),
+]
+
+
+@pytest.fixture(scope="module")
+def cabin_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in CABIN_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", CABIN_TRANSCRIPTS)
+def test_cabin_transcripts_route(router, cabin_actions, said, expected):
+    decision = router.decide(said, cabin_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert cabin_actions[decision.action_index].name == expected
+
+
+def test_specific_key_beats_generic_one(router):
+    """A button must not inherit aliases from a key it merely contains.
+
+    "intercom" is a word inside "PURSER TO INTERCOM", and applying both keys
+    gave that button every generic intercom alias - so "call the crew" tied
+    between the two and was refused.
+    """
+    from slcvoiceai.aliases import aliases_for
+    generic = set(aliases_for("INTERCOM >"))
+    specific = set(aliases_for("PURSER TO INTERCOM"))
+    assert generic and specific
+    assert not (generic & specific)
+
+
 def test_empty_action_list_declines(router):
     assert router.decide("intercom", []).action_index is None
 

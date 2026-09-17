@@ -100,6 +100,9 @@ _OPPOSITES = (
     frozenset({"yes", "no"}),
     frozenset({"connect", "remove"}),
     frozenset({"attach", "detach"}),
+    frozenset({"up", "down"}),
+    frozenset({"raise", "lower"}),
+    frozenset({"more", "less"}),
 )
 
 
@@ -260,6 +263,7 @@ class FuzzyRouter:
         if not actions:
             return Decision(reasoning="SLC is offering no buttons right now.")
 
+        said = normalise(utterance)
         scored = self.rank(utterance, actions)
         if not scored:
             return Decision(reasoning="Nothing matchable in that utterance.")
@@ -277,6 +281,18 @@ class FuzzyRouter:
         # matching - and when they are opposites ("connect" / "disconnect"
         # jetway) guessing is actively dangerous.
         if margin < 0.05:
+            # Saying a button's name exactly is the strongest signal there is,
+            # so let it settle a tie: "intercom" should reach "INTERCOM >" and
+            # not stall against "PURSER TO INTERCOM", which merely contains
+            # the word.
+            tied = [c for c in scored if best_score - c[0] < 0.05]
+            exact = [c for c in tied if normalise(c[2].name) == said]
+            if len(exact) == 1:
+                score, index, action = exact[0]
+                return Decision(
+                    action_index=index, confidence=score,
+                    reasoning="Exact match for {name!r}.".format(name=action.name),
+                )
             return Decision(
                 confidence=best_score,
                 reasoning="Ambiguous: {a!r} and {b!r} score almost the same.".format(

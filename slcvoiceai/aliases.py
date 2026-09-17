@@ -46,8 +46,16 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "ground crew": ("ground", "ground staff", "ground handling",
                     "ground service", "ground operation", "ramp",
                     "talk to ground", "call ground", "connect me with ground"),
-    "intercom": ("cabin crew", "call the cabin", "call the crew", "purser",
-                 "flight attendant", "senior cabin crew", "talk to the crew"),
+    # "stewardesa" is the everyday Polish word and comes back as "stewardess",
+    # which appears on no SLC button at all.
+    "intercom": ("cabin crew", "call the cabin", "call the crew",
+                 "flight attendant", "talk to the crew", "stewardess",
+                 "stewardesses", "call the stewardess", "call the stewardesses",
+                 "get me the crew", "i need the crew"),
+    "purser to intercom": ("purser", "senior cabin crew", "get me the purser",
+                           "chief flight attendant"),
+    "cabin crew to intercom": ("all the crew to the intercom",
+                               "everyone to the intercom"),
     "p a system": ("public address", "announcement", "tannoy", "speak to the cabin",
                    "address the passengers", "talk to the passengers",
                    "make an announcement", "pa"),
@@ -149,6 +157,21 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "notifications": ("show notifications", "any messages", "alerts"),
     "stand by": ("pause", "put it on hold", "suspend"),
 
+    # --- satisfaction ----------------------------------------------------
+    # "super, moze byc" comes back as "It can be. Super." or "Great, it can
+    # be done." - literal renderings of "moze byc" that share nothing with
+    # "THAT'S PERFECT".
+    "perfect": ("it can be", "it can be done", "great it can be done",
+                "super it can be", "it can be super", "that can be",
+                "that works", "yes that can be",
+                "that will do", "good enough", "super", "great", "thats fine",
+                "leave it there", "just right", "thats good"),
+    "hows it going": ("how does it go", "how is it going", "how are things",
+                      "hows everything", "how is everything going",
+                      "whats the situation"),
+    "how are the passengers": ("how are the people", "are the passengers ok",
+                               "how is the cabin"),
+
     # --- plain answers ---------------------------------------------------
     "yes": ("yes please", "yep", "yeah", "go for it", "permission granted",
             "granted", "approved"),
@@ -170,15 +193,23 @@ def aliases_for(button_name: str) -> tuple[str, ...]:
     contributes before a generic one ("start boarding") when both apply.
     """
     words = _words(button_name)
-    out: list[str] = []
     for key in sorted(ALIASES, key=len, reverse=True):
         if _contains_sequence(words, _words(key)):
-            out.extend(ALIASES[key])
-    return tuple(out)
+            # Only the most specific key, never every key that happens to
+            # match. "intercom" is a word inside "PURSER TO INTERCOM", so
+            # applying both handed that button every generic intercom alias
+            # and made it tie with INTERCOM > on "call the crew".
+            return ALIASES[key]
+    return ()
 
 
 def _words(text: str) -> list[str]:
-    return [w for w in re.split(r"[^a-z0-9]+", text.lower()) if w]
+    """Lowercase words, with apostrophes closed up rather than split on.
+
+    "HOW'S IT GOING?" must yield ["hows", "it", "going"] - splitting on the
+    apostrophe gives ["how", "s", ...] and no key can ever match it.
+    """
+    return [w for w in re.split(r"[^a-z0-9]+", text.lower().replace("'", "")) if w]
 
 
 def _contains_sequence(haystack: list[str], needle: list[str]) -> bool:
