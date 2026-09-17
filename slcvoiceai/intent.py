@@ -70,6 +70,10 @@ _NOISE = {
     # of what they want done. No SLC control carries the word except the one
     # that toggles the toolbar, which is denylisted for exactly this reason.
     "button", "press", "click", "switch",
+    # Intensifiers. "thank you very much for the information" carries the
+    # same instruction as "thanks for the information", but the extra words
+    # inflate the denominator the reach damping divides by.
+    "very", "much", "really", "quite",
 }
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")

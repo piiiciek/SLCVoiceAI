@@ -40,7 +40,8 @@ DEFAULT_TERMS = (
     "pushback", "taxi", "takeoff", "climb", "cruise", "descent", "approach",
     "go around", "landing", "turnaround",
     # radio
-    "roger", "wilco", "standby", "disregard", "say again", "radio check",
+    "roger", "wilco", "understood", "acknowledged", "copy that",
+    "standby", "disregard", "say again", "radio check",
     "loud and clear", "go ahead", "cockpit to ground",
     # things Whisper gets wrong in Polish
     "start boarding", "loading", "offloading", "connect", "disconnect",

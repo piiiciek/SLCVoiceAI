@@ -19,9 +19,14 @@ import re
 
 ALIASES: dict[str, tuple[str, ...]] = {
     # --- acknowledgement -------------------------------------------------
+    # SLC does not always offer THANK YOU. When a ground crew exchange ends,
+    # ROGER is often the only acknowledgement on screen - so thanking someone
+    # for information has to reach it, or the command finds nothing at all.
     "roger": ("understood", "i understand", "copy", "copy that", "got it",
               "acknowledged", "affirm", "affirmative", "noted", "received",
-              "ok", "okay", "alright", "sure"),
+              "ok", "okay", "alright", "sure", "thanks for the information",
+              "thanks for the info", "thank you for the information",
+              "good to know", "understood thanks", "noted thanks"),
     "will do": ("wilco", "we will", "i will do that", "consider it done"),
     "thank you": ("thanks", "thanks a lot", "cheers", "much appreciated",
                   "appreciate it", "ok thanks", "okay thanks", "thanks then",

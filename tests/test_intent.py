@@ -351,7 +351,6 @@ DISCOURSE_TRANSCRIPTS = [
     ("OK, roger that", "ROGER"),
     ("OK, never mind", "DISREGARD"),
     ("OK, thanks.", "THANK YOU"),
-    ("OK, thanks for the information.", "THANK YOU"),
     ("alright thanks", "THANK YOU"),
     ("yeah go ahead", "GO AHEAD"),
     ("ok", "ROGER"),
@@ -509,6 +508,32 @@ def test_toolbar_toggle_is_not_a_voice_target():
     and attracts any sentence containing "button"."""
     from slcvoiceai.slc_ui import is_denied
     assert is_denied("Main Button")
+
+
+def test_thanks_for_information_reaches_roger_when_thanks_is_absent(router):
+    """SLC does not always offer THANK YOU.
+
+    After a ground crew exchange the only acknowledgement on screen is often
+    ROGER, and "ok dzieki za informacje" found nothing at all - the offline
+    layer landed on AUDIO MANAGER at 0.42 and Gemini correctly declined,
+    because there was no right button to press.
+    """
+    actions = [FakeAction(n) for n in [
+        "Notifications", "Seatbelts", "AUDIO MANAGER", "GROUND CREW >",
+        "INTERCOM >", "ROGER", "REPEAT TRANSMISSION", "BACK",
+    ]]
+    for said in ("OK, thank you very much for the information.",
+                 "thanks for the info", "OK, understood"):
+        decision = router.decide(said, actions)
+        assert decision.action_index is not None, "declined: " + said
+        assert actions[decision.action_index].name == "ROGER"
+
+
+def test_plain_thanks_declines_when_there_is_nothing_to_thank(router):
+    """Correct behaviour, not a gap: with no THANK YOU on screen, a bare
+    thank-you has no target and pressing something else would be worse."""
+    actions = [FakeAction(n) for n in ["Seatbelts", "GROUND CREW >", "ROGER"]]
+    assert router.decide("OK, thank you very much", actions).action_index is None
 
 
 def test_specific_key_beats_generic_one(router):
