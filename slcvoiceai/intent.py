@@ -1,24 +1,151 @@
 """Map a free-form utterance onto one of SLC's currently available controls.
 
-The model never invents an action. It is given the exact list of controls SLC
-is offering right now and must either pick one by index or decline. Declining
-is a first-class answer: misfiring a cabin command mid-approach is worse than
-asking the pilot to repeat themselves.
+Two interchangeable backends, selected by ``[intent] backend`` in config.toml:
+
+``fuzzy``
+    Offline string matching against the button names. Free, instant, needs no
+    API key and no VRAM beyond Whisper itself - which matters when the GPU is
+    already busy running the simulator. Relies on Whisper's ``translate`` task
+    to turn Polish speech into English before matching.
+
+``claude``
+    The Anthropic API. Markedly better at loose, idiomatic or indirect
+    phrasing ("tell them we're good to push"), at the cost of roughly a third
+    of a grosz per command.
+
+Both return the same :class:`Decision`, and neither may invent an action: the
+choice is always an index into the list of controls SLC is offering right now.
+Declining is a first-class answer - misfiring a cabin command mid-approach is
+worse than asking the pilot to repeat themselves.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+import re
+from typing import Optional, Protocol
 
-import anthropic
 from pydantic import BaseModel, Field
 
-from .config import LlmConfig
+from .config import Config
 from .slc_ui import Action
 
 log = logging.getLogger(__name__)
 
+
+class Decision(BaseModel):
+    """A routing decision, from whichever backend produced it."""
+
+    action_index: Optional[int] = Field(
+        default=None,
+        description="0-based index into the numbered button list, or null to decline.",
+    )
+    confidence: float = Field(
+        default=0.0, ge=0.0, le=1.0,
+        description="Calibrated probability that this is the intended button.",
+    )
+    reasoning: str = Field(
+        default="", description="One short sentence explaining the choice.",
+    )
+
+
+class Router(Protocol):
+    def decide(self, utterance: str, actions: list[Action],
+               flight_context: str = "") -> Decision:
+        ...
+
+
+# --------------------------------------------------------------------------
+# Offline fuzzy backend
+# --------------------------------------------------------------------------
+
+#: Words that carry no signal in an SLC button name or a spoken command.
+_NOISE = {
+    "the", "a", "an", "to", "for", "of", "and", "is", "are", "be", "please",
+    "our", "your", "we", "i", "it", "that", "this", "will", "can", "could",
+    "would", "you", "us", "them", "slc", "captain", "cockpit",
+}
+
+_PUNCT = re.compile(r"[^a-z0-9 ]+")
+
+
+def normalise(text: str) -> str:
+    """Lowercase, drop punctuation and filler, collapse whitespace.
+
+    Button names carry decoration the pilot never says - trailing '>' on
+    submenu entries, '...' on pending states, ALL CAPS throughout.
+    """
+    text = _PUNCT.sub(" ", text.lower())
+    words = [w for w in text.split() if w and w not in _NOISE]
+    return " ".join(words)
+
+
+class FuzzyRouter:
+    """Offline matcher. No network, no API key, no model weights."""
+
+    def __init__(self, min_confidence: float):
+        self.min_confidence = min_confidence
+        try:
+            from rapidfuzz import fuzz
+        except ImportError as exc:  # pragma: no cover - dependency guard
+            raise RuntimeError(
+                "The fuzzy backend needs rapidfuzz. Run: pip install rapidfuzz"
+            ) from exc
+        self._fuzz = fuzz
+
+    def _score(self, said: str, candidate: str) -> float:
+        """0.0-1.0 similarity, forgiving of word order and extra words."""
+        if not said or not candidate:
+            return 0.0
+        fuzz = self._fuzz
+        # token_set_ratio ignores word order and duplicated words; partial_ratio
+        # rewards the command being a substring of a longer button name. Taking
+        # the best of the two handles both "pushback" -> "READY FOR PUSHBACK"
+        # and "ready for pushback now" -> "READY FOR PUSHBACK".
+        return max(
+            fuzz.token_set_ratio(said, candidate),
+            fuzz.partial_ratio(said, candidate),
+        ) / 100.0
+
+    def decide(self, utterance: str, actions: list[Action],
+               flight_context: str = "") -> Decision:
+        if not actions:
+            return Decision(reasoning="SLC is offering no buttons right now.")
+
+        said = normalise(utterance)
+        if not said:
+            return Decision(reasoning="Nothing matchable in that utterance.")
+
+        scored = sorted(
+            ((self._score(said, normalise(a.name)), i, a) for i, a in enumerate(actions)),
+            key=lambda t: t[0], reverse=True,
+        )
+        best_score, best_index, best_action = scored[0]
+        runner_up = scored[1][0] if len(scored) > 1 else 0.0
+
+        # A clear winner matters as much as a high score. Two buttons scoring
+        # 0.80 and 0.79 means we are guessing, not matching.
+        margin = best_score - runner_up
+        if best_score >= self.min_confidence and margin < 0.05:
+            return Decision(
+                confidence=best_score,
+                reasoning="Ambiguous: {a!r} and {b!r} score almost the same.".format(
+                    a=best_action.name, b=scored[1][2].name),
+            )
+
+        log.info("Fuzzy best: %r %.2f (runner-up %r %.2f)",
+                 best_action.name, best_score, scored[1][2].name if len(scored) > 1 else "-",
+                 runner_up)
+        return Decision(
+            action_index=best_index,
+            confidence=best_score,
+            reasoning="Closest match to {name!r}.".format(name=best_action.name),
+        )
+
+
+# --------------------------------------------------------------------------
+# Claude backend
+# --------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You route a pilot's spoken words to a button in \
 Self-Loading Cargo, a cabin-crew simulation for flight simulators.
@@ -41,24 +168,11 @@ Rules:
 """
 
 
-class Decision(BaseModel):
-    """The model's routing decision."""
+class ClaudeRouter:
+    def __init__(self, cfg, api_key: str):
+        import anthropic
 
-    action_index: Optional[int] = Field(
-        default=None,
-        description="0-based index into the numbered button list, or null to decline.",
-    )
-    confidence: float = Field(
-        default=0.0, ge=0.0, le=1.0,
-        description="Calibrated probability that this is the intended button.",
-    )
-    reasoning: str = Field(
-        default="", description="One short sentence explaining the choice.",
-    )
-
-
-class IntentRouter:
-    def __init__(self, cfg: LlmConfig, api_key: str):
+        self._anthropic = anthropic
         self.cfg = cfg
         self.client = anthropic.Anthropic(api_key=api_key, timeout=cfg.timeout_seconds)
 
@@ -67,6 +181,7 @@ class IntentRouter:
         if not actions:
             return Decision(reasoning="SLC is offering no buttons right now.")
 
+        anthropic = self._anthropic
         listing = "\n".join(
             "{i}. {name}   (window: {win})".format(i=i, name=a.name, win=a.window)
             for i, a in enumerate(actions)
@@ -112,3 +227,16 @@ class IntentRouter:
         log.info("Decision: index=%s confidence=%.2f - %s",
                  decision.action_index, decision.confidence, decision.reasoning)
         return decision
+
+
+def build_router(cfg: Config) -> Router:
+    backend = cfg.intent.backend.strip().lower()
+    if backend == "fuzzy":
+        log.info("Intent backend: fuzzy (offline, free)")
+        return FuzzyRouter(cfg.behaviour.min_confidence)
+    if backend == "claude":
+        log.info("Intent backend: Claude (%s)", cfg.llm.model)
+        return ClaudeRouter(cfg.llm, cfg.api_key)
+    raise ValueError(
+        "Unknown [intent] backend {b!r}. Use 'fuzzy' or 'claude'.".format(b=backend)
+    )

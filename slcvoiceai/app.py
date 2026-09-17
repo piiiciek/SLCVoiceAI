@@ -8,7 +8,7 @@ import time
 
 from .config import Config
 from .context import format_context, read_flight_context
-from .intent import IntentRouter
+from .intent import build_router
 from .slc_ui import SlcUI
 
 log = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class Bridge:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.ui = SlcUI(cfg.slc.process_name)
-        self.router = IntentRouter(cfg.llm, cfg.api_key)
+        self.router = build_router(cfg)
         # Imported lazily: loading Whisper takes a while and pulls in CUDA.
         from .stt import Transcriber
         self.stt = Transcriber(cfg.stt)

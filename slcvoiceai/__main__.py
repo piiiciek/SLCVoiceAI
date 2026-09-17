@@ -56,11 +56,12 @@ def main(argv: list[str] | None = None) -> int:
                 i=i, name=action.name, ctype=action.control_type, win=action.window))
         return 0
 
-    try:
-        cfg.api_key  # fail fast with a clear message rather than mid-flight
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+    if cfg.needs_api_key:
+        try:
+            cfg.api_key  # fail fast with a clear message rather than mid-flight
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     return Bridge(cfg).run()
 

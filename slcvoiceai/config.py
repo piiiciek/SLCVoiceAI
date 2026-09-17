@@ -25,6 +25,19 @@ class SttConfig:
     language: str = ""              # "" = autodetect, "pl" / "en" to force
     beam_size: int = 5
 
+    # "translate" makes Whisper emit English whatever you speak, which is what
+    # lets the offline fuzzy backend match Polish speech against SLC's English
+    # button names. "transcribe" keeps your own language.
+    task: str = "translate"
+
+
+@dataclass
+class IntentConfig:
+    #: "fuzzy"  - offline, free, no API key, no extra VRAM.
+    #: "claude" - Anthropic API; better at loose and idiomatic phrasing, costs
+    #:            roughly a third of a grosz per command.
+    backend: str = "fuzzy"
+
 
 @dataclass
 class LlmConfig:
@@ -43,7 +56,7 @@ class SlcConfig:
 
 @dataclass
 class BehaviourConfig:
-    min_confidence: float = 0.55
+    min_confidence: float = 0.80
     dry_run: bool = False
     speak_feedback: bool = False
     log_file: str = "slcvoiceai.log"
@@ -53,9 +66,14 @@ class BehaviourConfig:
 class Config:
     audio: AudioConfig = field(default_factory=AudioConfig)
     stt: SttConfig = field(default_factory=SttConfig)
+    intent: IntentConfig = field(default_factory=IntentConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
     slc: SlcConfig = field(default_factory=SlcConfig)
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
+
+    @property
+    def needs_api_key(self) -> bool:
+        return self.intent.backend == "claude"
 
     @property
     def api_key(self) -> str:
@@ -71,6 +89,7 @@ class Config:
 _SECTIONS = {
     "audio": AudioConfig,
     "stt": SttConfig,
+    "intent": IntentConfig,
     "llm": LlmConfig,
     "slc": SlcConfig,
     "behaviour": BehaviourConfig,

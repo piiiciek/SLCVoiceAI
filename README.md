@@ -103,8 +103,8 @@ python tools/probe_slc.py --process chrome.exe --depth 6
 - Windows 10/11
 - Python 3.11+ (3.12 recommended — the config loader uses `tomllib`)
 - Self-Loading Cargo v1.6+
-- An [Anthropic API key](https://console.anthropic.com/)
 - A CUDA GPU is strongly recommended for Whisper. CPU works but adds seconds to every command.
+- **No API key needed** on the default offline backend — see below.
 
 ## Install
 
@@ -116,13 +116,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Set your API key once, in a terminal:
-
-```bash
-setx ANTHROPIC_API_KEY "sk-ant-..."
-```
-
-Then copy the example config and edit it:
+Copy the example config and edit it:
 
 ```bash
 copy config.example.toml config.toml
@@ -136,6 +130,30 @@ The two settings worth checking first:
 ```bash
 python -m slcvoiceai --list-devices
 ```
+
+## Two ways to match intent
+
+`[intent] backend` in `config.toml` picks how a spoken phrase becomes a button press.
+
+**`fuzzy`** (default) — offline string matching. Free, instant, no API key, and
+no VRAM beyond Whisper. That last point matters more than it sounds: you are
+running MSFS at the same time, and a local 7–14B model would want ~8 GB of the
+same card. Whisper's `translate` task turns your Polish into English first, so
+the matching happens against SLC's own English button names.
+
+It handles anything close to the button's wording — *"połącz mnie z obsługą
+naziemną"* → `GROUND CREW >`, *"pasy bezpieczeństwa"* → `Seatbelts`. It will not
+handle genuinely indirect phrasing like *"tell them we're good to push"*.
+
+**`claude`** — the Anthropic API, which does handle indirect phrasing, and can
+use flight context to disambiguate. Costs roughly a third of a grosz per
+command (about 0.20 zł per flight); needs credit on
+[console.anthropic.com](https://console.anthropic.com/) and
+`setx ANTHROPIC_API_KEY "sk-ant-..."`. Drop `min_confidence` to ~0.55 when you
+switch — that model reports calibrated confidence and declines on its own.
+
+Start on `fuzzy`. It costs nothing to find out whether it is good enough for how
+you actually speak.
 
 ## Use
 
@@ -165,11 +183,14 @@ Two deliberate guardrails, because a misfire mid-approach is worse than being as
 
 - **Visibility filter.** The model is only ever shown controls SLC is currently displaying, so it cannot reach a command that is out of context for the phase of flight.
 - **Denylist.** Session-ending and flight-destroying controls — `EXIT SELF-LOADING CARGO`, `CLOSE SELF-LOADING CARGO`, `CANCEL SINGLE FLIGHT`, `DISPATCH NEXT FLIGHT`, `DO NOT RESTORE PREVIOUS FLIGHT` and friends — are stripped before the model ever sees them. It cannot press what it cannot see. The list lives in `slcvoiceai/slc_ui.py`.
-- **Confidence floor.** Below `min_confidence` (default `0.55`) the bridge does nothing and logs why. The model is also explicitly instructed that declining is a valid answer.
+- **Confidence floor.** Below `min_confidence` (default `0.80`) the bridge does nothing and logs why. On the fuzzy backend this is the guardrail that matters most: string matching always finds a *nearest* neighbour, so without a high floor, radio chatter lands on a cabin command — *"tower london zero two"* scored 0.60 against `PHONE >`. The default was picked by sweeping thresholds against real SLC buttons; 0.75–0.85 separates commands from chatter cleanly. `tests/test_intent.py` locks that in.
+- **Ambiguity check.** If the two best candidates score within 0.05 of each other, the bridge declines rather than picking one.
 
 ## Privacy
 
-Audio never leaves your machine — Whisper runs locally. What *is* sent to the Anthropic API is the resulting transcript, the list of button names SLC is currently showing, and whatever flight context you enabled in `[slc] stream_export_dir`.
+On the default `fuzzy` backend **nothing leaves your machine at all** — Whisper runs locally and the matching is plain string comparison.
+
+On the `claude` backend, audio still never leaves your machine; what is sent is the resulting transcript, the list of button names SLC is currently showing, and whatever flight context you enabled in `[slc] stream_export_dir`.
 
 ---
 
@@ -187,6 +208,12 @@ slcvoiceai/
   config.py     config.toml loading
 tools/
   probe_slc.py  standalone UIA diagnostic
+tests/
+  test_intent.py  routing regressions, runs without SLC
+```
+
+```bash
+python -m pytest tests/ -q
 ```
 
 ## Troubleshooting

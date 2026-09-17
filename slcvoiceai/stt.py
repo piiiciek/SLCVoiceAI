@@ -41,6 +41,7 @@ class Transcriber:
         segments, info = self.model.transcribe(
             audio,
             language=self.cfg.language or None,
+            task=self.cfg.task,
             beam_size=self.cfg.beam_size,
             vad_filter=True,
         )
