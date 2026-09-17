@@ -25,6 +25,56 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 
+def _register_nvidia_dlls() -> list[str]:
+    """Let Windows find the CUDA runtime DLLs shipped in the venv.
+
+    ctranslate2 needs cuBLAS and cuDNN at *inference* time, not at load time -
+    the model loads happily on the GPU and then the first transcription dies
+    with "Library cublas64_12.dll is not found". The pip packages
+    nvidia-cublas-cu12 / nvidia-cudnn-cu12 install those DLLs under
+    site-packages\\nvidia\\*\\bin, which is not on the DLL search path, so
+    they have to be registered explicitly before ctranslate2 is imported.
+    """
+    if os.name != "nt":
+        return []
+    import site
+
+    added: list[str] = []
+    roots = list(site.getsitepackages())
+    user_site = site.getusersitepackages()
+    if isinstance(user_site, str):
+        roots.append(user_site)
+
+    for root in roots:
+        nvidia = os.path.join(root, "nvidia")
+        if not os.path.isdir(nvidia):
+            continue
+        for package in sorted(os.listdir(nvidia)):
+            bin_dir = os.path.join(nvidia, package, "bin")
+            if not os.path.isdir(bin_dir):
+                continue
+            try:
+                os.add_dll_directory(bin_dir)
+            except OSError:
+                pass
+            added.append(bin_dir)
+
+    # add_dll_directory only covers loads that go through Python's loader with
+    # LOAD_LIBRARY_SEARCH_USER_DIRS. ctranslate2 resolves cuBLAS with a plain
+    # LoadLibrary, which ignores it and searches PATH instead - so prepend
+    # there too, or the model loads on the GPU and the first transcription
+    # still dies with "cublas64_12.dll is not found".
+    if added:
+        current = os.environ.get("PATH", "")
+        missing = [d for d in added if d not in current]
+        if missing:
+            os.environ["PATH"] = os.pathsep.join(missing + [current])
+    return added
+
+
+_NVIDIA_DLL_DIRS = _register_nvidia_dlls()
+
+
 #: Substrings that identify a genuine GPU/driver problem in ctranslate2's or
 #: CUDA's error text, as opposed to a download, disk or permission failure.
 _CUDA_MARKERS = (
@@ -53,6 +103,7 @@ class Transcriber:
         try:
             self.model = WhisperModel(
                 cfg.model, device=cfg.device, compute_type=cfg.compute_type)
+            self._device = cfg.device
         except Exception as exc:
             # Only retry on CPU for failures that are actually about the GPU.
             # Blaming CUDA for every exception sends you hunting for a driver
@@ -61,14 +112,58 @@ class Transcriber:
             if cfg.device == "cuda" and _is_cuda_failure(exc):
                 log.warning("CUDA unavailable (%s) - falling back to CPU/int8", exc)
                 self.model = WhisperModel(cfg.model, device="cpu", compute_type="int8")
+                self._device = "cpu"
             else:
                 log.error("Could not load Whisper %s on %s: %s",
                           cfg.model, cfg.device, exc)
                 raise
-        log.info("Whisper ready in %.1fs", time.time() - started)
+        if _NVIDIA_DLL_DIRS:
+            log.debug("Registered CUDA DLL directories: %s", _NVIDIA_DLL_DIRS)
+        self._warm_up()
+        log.info("Whisper ready in %.1fs (%s)", time.time() - started, self._device)
+
+    def _warm_up(self) -> None:
+        """Burn the first-call cost now instead of on the pilot's first command.
+
+        CUDA kernel setup makes the very first transcription ~10s; every one
+        after it is ~0.1s. Paying that during startup keeps the wait where the
+        user expects one, and also means a broken CUDA runtime is caught and
+        falls back before anyone is mid-flight.
+        """
+        try:
+            silence = np.zeros(self.cfg.sample_warmup_frames, dtype=np.float32)
+            self.transcribe(silence)
+        except Exception as exc:
+            log.warning("Warm-up transcription failed (%s) - continuing anyway", exc)
+
+    def _fall_back_to_cpu(self, exc: Exception) -> bool:
+        """Swap the GPU model for a CPU one after a CUDA failure at runtime.
+
+        Returns False if we are already on the CPU, so the caller re-raises
+        instead of looping.
+        """
+        from faster_whisper import WhisperModel
+
+        if self._device == "cpu":
+            return False
+        log.warning("CUDA failed during transcription (%s) - switching to CPU "
+                    "for the rest of this session", exc)
+        self.model = WhisperModel(self.cfg.model, device="cpu", compute_type="int8")
+        self._device = "cpu"
+        return True
 
     def transcribe(self, audio: np.ndarray) -> tuple[str, str]:
         """Return (text, detected_language) for a float32 mono clip."""
+        try:
+            return self._transcribe(audio)
+        except Exception as exc:
+            # cuBLAS/cuDNN problems surface here, not at load time. Degrade to
+            # the CPU rather than failing every single utterance.
+            if _is_cuda_failure(exc) and self._fall_back_to_cpu(exc):
+                return self._transcribe(audio)
+            raise
+
+    def _transcribe(self, audio: np.ndarray) -> tuple[str, str]:
         started = time.time()
         segments, info = self.model.transcribe(
             audio,

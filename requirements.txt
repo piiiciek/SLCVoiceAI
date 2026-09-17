@@ -6,6 +6,13 @@ uiautomation>=2.0.18
 pydantic>=2.7
 rapidfuzz>=3.9
 
+# CUDA runtime for ctranslate2. faster-whisper loads the model on the GPU
+# without these and then dies on the first transcription with
+# "Library cublas64_12.dll is not found" - they are not optional on Windows
+# unless you have a system-wide CUDA toolkit. Harmless on a CPU-only box.
+nvidia-cublas-cu12; platform_system == "Windows"
+nvidia-cudnn-cu12; platform_system == "Windows"
+
 # Only needed for [intent] backend = "claude". The default offline
 # backend does not use it.
 anthropic>=1.0.0

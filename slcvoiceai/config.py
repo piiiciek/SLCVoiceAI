@@ -30,6 +30,10 @@ class SttConfig:
     # button names. "transcribe" keeps your own language.
     task: str = "translate"
 
+    #: Samples of silence pushed through the model at startup to pay the CUDA
+    #: first-call cost (~10s) up front rather than on the first real command.
+    sample_warmup_frames: int = 16000
+
 
 @dataclass
 class IntentConfig:
