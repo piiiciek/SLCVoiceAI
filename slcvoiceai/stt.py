@@ -92,30 +92,49 @@ def _is_cuda_failure(exc: Exception) -> bool:
     return any(marker in text for marker in _CUDA_MARKERS)
 
 
+def _resolve(cfg: SttConfig) -> tuple[str, str, str]:
+    """Settle on (model, device, compute_type), asking the hardware if asked to.
+
+    Any explicit value in config.toml wins; "auto" defers to what the card can
+    actually spare right now.
+    """
+    from .hardware import choose
+
+    if cfg.model != "auto":
+        return cfg.model, cfg.device, cfg.compute_type
+    model, device, compute_type = choose("auto")
+    # A deliberate device or quantisation still overrides the auto choice.
+    if cfg.device != "auto":
+        device = cfg.device
+    if cfg.compute_type != "auto":
+        compute_type = cfg.compute_type
+    return model, device, compute_type
+
+
 class Transcriber:
     def __init__(self, cfg: SttConfig):
         from faster_whisper import WhisperModel
 
         self.cfg = cfg
-        log.info("Loading Whisper %s on %s (%s)...",
-                 cfg.model, cfg.device, cfg.compute_type)
+        model, device, compute_type = _resolve(cfg)
+        log.info("Loading Whisper %s on %s (%s)...", model, device, compute_type)
         started = time.time()
         try:
             self.model = WhisperModel(
-                cfg.model, device=cfg.device, compute_type=cfg.compute_type)
-            self._device = cfg.device
+                model, device=device, compute_type=compute_type)
+            self._device = device
+            self._model_name = model
         except Exception as exc:
             # Only retry on CPU for failures that are actually about the GPU.
             # Blaming CUDA for every exception sends you hunting for a driver
             # problem when the real fault was a download or a file permission,
             # and silently drops you onto a much slower path.
-            if cfg.device == "cuda" and _is_cuda_failure(exc):
+            if device == "cuda" and _is_cuda_failure(exc):
                 log.warning("CUDA unavailable (%s) - falling back to CPU/int8", exc)
-                self.model = WhisperModel(cfg.model, device="cpu", compute_type="int8")
+                self.model = WhisperModel(model, device="cpu", compute_type="int8")
                 self._device = "cpu"
             else:
-                log.error("Could not load Whisper %s on %s: %s",
-                          cfg.model, cfg.device, exc)
+                log.error("Could not load Whisper %s on %s: %s", model, device, exc)
                 raise
         if _NVIDIA_DLL_DIRS:
             log.debug("Registered CUDA DLL directories: %s", _NVIDIA_DLL_DIRS)
@@ -153,7 +172,7 @@ class Transcriber:
             return False
         log.warning("CUDA failed during transcription (%s) - switching to CPU "
                     "for the rest of this session", exc)
-        self.model = WhisperModel(self.cfg.model, device="cpu", compute_type="int8")
+        self.model = WhisperModel(self._model_name, device="cpu", compute_type="int8")
         self._device = "cpu"
         return True
 

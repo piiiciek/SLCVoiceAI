@@ -21,9 +21,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="decide but never actually press anything")
     ap.add_argument("--list-actions", action="store_true",
                     help="print what SLC is offering right now, then exit")
+    ap.add_argument("--check-hardware", action="store_true",
+                    help="show the GPU found and which model auto would pick")
     ap.add_argument("--list-devices", action="store_true",
                     help="print available input devices, then exit")
     args = ap.parse_args(argv)
+
+    if args.check_hardware:
+        from .hardware import describe
+        print(describe())
+        return 0
 
     if args.list_devices:
         import sounddevice as sd

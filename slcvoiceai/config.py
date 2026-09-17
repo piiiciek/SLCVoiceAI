@@ -19,9 +19,9 @@ class AudioConfig:
 
 @dataclass
 class SttConfig:
-    model: str = "large-v3"
-    device: str = "cuda"            # "cuda" or "cpu"
-    compute_type: str = "int8"      # see config.example.toml for measurements
+    model: str = "auto"
+    device: str = "auto"            # "auto", "cuda" or "cpu"
+    compute_type: str = "auto"      # "auto", "int8" or "float16"
     language: str = ""              # "" = autodetect, "pl" / "en" to force
     #: 1 (greedy). Measured on real speech with the simulator running,
     #: beam_size=5 took 6.00s against 1.17s for the same model and produced

@@ -30,26 +30,30 @@ max_seconds = 20.0
 min_seconds = 0.35      # ignore accidental taps of the PTT key
 
 [stt]
-# faster-whisper model and quantisation. Measured on Polish speech with MSFS
-# running and the GPU at 92%, translating "polacz mnie z obsluga naziemna":
+# "auto" measures free VRAM at startup and picks a model that fits. The
+# bridge shares the card with the simulator, and the simulator wins - on a
+# 16 GB card MSFS 2024 routinely holds 15 GB, which left large-v3 in float16
+# fighting for scraps and turning 2-second transcriptions into 92-second ones.
 #
-#   large-v3  int8      1897 MB  1.61s  "Connect me with ground service."
-#   large-v3  float16   2777 MB  1.40s  "Connect me with ground service."
-#   medium    int8      1070 MB  1.25s  "Join me with a ground service."
-#   small     float16   ~500 MB  0.44s  "Connect me with the service to the earth"
+# What auto picks, by free VRAM:
 #
-# small is quick but translates Polish literally, which is why speaking
-# English to it feels better. large-v3 at int8 keeps the good translation and
-# uses a third less memory than float16 - and memory, not speed, is what
-# caused 90-second stalls when the simulator had the card. Drop to "medium"
-# if yours is tighter still.
-model = "large-v3"
-device = "cuda"          # "cpu" works but is markedly slower here
-compute_type = "int8"    # "float16" if you have VRAM to spare
+#   >= 3600 MB   large-v3   1.61s/command  best at translating Polish
+#   >= 2200 MB   medium     1.25s          noticeably looser translation
+#   >= 1100 MB   small      0.96s          translates non-English literally
+#   >=  700 MB   base       0.40s          weaker still
+#    <  700 MB   base on the CPU - a starved GPU is slower than a free CPU
+#
+# Free VRAM is read when the bridge starts, so start it after the simulator
+# for the choice to reflect a real flight. Check with:
+#
+#   python -m slcvoiceai --check-hardware
+#
+# Naming a model here overrides all of that - an explicit choice is a
+# decision, not a suggestion.
+model = "auto"
+device = "auto"          # "auto", "cuda" or "cpu"
+compute_type = "auto"    # "auto", "int8" or "float16"
 
-# "translate" makes Whisper emit English no matter what you speak - this is
-# what lets you talk Polish to a program whose buttons are all in English.
-# Change to "transcribe" only if you already speak English to it.
 task = "translate"
 
 # "" = autodetect the spoken language (recommended). Force it to "pl" if

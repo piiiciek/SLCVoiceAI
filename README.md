@@ -104,6 +104,7 @@ python tools/probe_slc.py --process chrome.exe --depth 6
 - Python 3.11+ (3.12 recommended — the config loader uses `tomllib`)
 - Self-Loading Cargo v1.6+
 - A CUDA GPU is strongly recommended for Whisper. CPU works but adds seconds to every command.
+- Whisper's model is chosen automatically to fit the VRAM you have left — see below.
 - **No API key needed** on the default offline backend — see below.
 
 ## Install
@@ -130,6 +131,34 @@ The two settings worth checking first:
 ```bash
 python -m slcvoiceai --list-devices
 ```
+
+## Picking a Whisper model
+
+`model = "auto"` (the default) reads free VRAM at startup and picks the largest
+model that fits with headroom:
+
+| Free VRAM | Model | Per command | Notes |
+|---|---|---|---|
+| ≥ 3600 MB | `large-v3` | 1.61s | best at translating non-English |
+| ≥ 2200 MB | `medium` | 1.25s | noticeably looser translation |
+| ≥ 1100 MB | `small` | 0.96s | translates non-English literally |
+| ≥ 700 MB | `base` | 0.40s | weaker still |
+| < 700 MB | `base` on CPU | ~1.6s | a starved GPU loses to a free CPU |
+
+This matters because the bridge shares a card with the simulator and the
+simulator wins: on a 16 GB card MSFS 2024 routinely holds 15 GB, which left
+`large-v3` in float16 fighting for the last few hundred megabytes and turning
+2-second transcriptions into 92-second ones.
+
+Free VRAM is read when the bridge starts, so **start it after the simulator**
+for the choice to reflect a real flight. To see what it would pick:
+
+```bash
+python -m slcvoiceai --check-hardware
+```
+
+Naming a model in `config.toml` overrides all of it — an explicit choice is
+treated as a decision, not a suggestion.
 
 ## Two ways to match intent
 
@@ -267,12 +296,14 @@ slcvoiceai/
   intent.py     Claude: utterance + button list -> decision
   context.py    optional flight context from SLC's stream export
   config.py     config.toml loading
+  hardware.py   VRAM detection and model selection
   gui.py        tkinter control panel (--gui)
   aliases.py    synonym table for aviation phraseology
 tools/
   probe_slc.py  standalone UIA diagnostic
 tests/
-  test_intent.py  routing regressions, runs without SLC
+  test_intent.py    routing regressions, runs without SLC
+  test_hardware.py  model selection across VRAM levels
 ```
 
 ```bash
