@@ -70,11 +70,15 @@ _NOISE = {
     # of what they want done. No SLC control carries the word except the one
     # that toggles the toolbar, which is denylisted for exactly this reason.
     "button", "press", "click", "switch",
-    # Intensifiers. "thank you very much for the information" carries the
-    # same instruction as "thanks for the information", but the extra words
-    # inflate the denominator the reach damping divides by.
-    "very", "much", "really", "quite",
 }
+
+#: Dropped from what the pilot says, but kept in button names. "thank you
+#: very much for the information" asks for the same thing as "thanks for the
+#: information", so the intensifiers only inflate the denominator the reach
+#: damping divides by - but SLC has a button literally called "THANKS VERY
+#: MUCH", and stripping those words from it leaves a near-duplicate of
+#: "THANK YOU" that ties with it on every thank-you phrase.
+_UTTERANCE_FILLER = {"very", "much", "really", "quite", "please"}
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
 
@@ -162,14 +166,18 @@ def polarity_conflict(said_tokens: set[str], candidate_tokens: set[str]) -> bool
     return False
 
 
-def normalise(text: str) -> str:
+def normalise(text: str, spoken: bool = True) -> str:
     """Lowercase, drop punctuation and filler, collapse whitespace.
 
     Button names carry decoration the pilot never says - trailing '>' on
     submenu entries, '...' on pending states, ALL CAPS throughout.
+
+    `spoken` distinguishes what the pilot said from what a button is called.
+    Intensifiers are noise in the first and meaning in the second.
     """
     text = _PUNCT.sub(" ", text.lower())
-    words = [w for w in text.split() if w and w not in _NOISE]
+    drop = _NOISE | _UTTERANCE_FILLER if spoken else _NOISE
+    words = [w for w in text.split() if w and w not in drop]
     return " ".join(words)
 
 
@@ -195,12 +203,12 @@ class FuzzyRouter:
         any of them stands in for the button.
         """
         said_tokens = set(said.split())
-        name = normalise(action.name)
+        name = normalise(action.name, spoken=False)
         best = self._score(said, name) * self._name_reach(action.name, said_tokens)
         for alias in aliases_for(action.name):
             if best >= 0.99:
                 break
-            candidate = normalise(alias)
+            candidate = normalise(alias, spoken=False)
             if not candidate:
                 continue
             # An alias should fire when the utterance *is* that phrase, not
