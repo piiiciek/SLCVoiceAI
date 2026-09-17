@@ -411,14 +411,78 @@ class ClaudeRouter:
         return decision
 
 
+class CascadeRouter:
+    """Offline matcher first; ask the cloud only when it cannot settle.
+
+    Lifted from BlueLine Realism, which logs the same two outcomes:
+    "Layer 1 local intent - skipping cloud" and "Layer 1 soft local -
+    consulting cloud".
+
+    The point is that most commands are unambiguous - "roger", "connect the
+    jetway", "intercom" - and resolve offline at full confidence. Only the
+    awkward ones ("super, moze byc") travel, so a flight costs a handful of
+    requests rather than one per command.
+    """
+
+    def __init__(self, local: Router, cloud: Router, cloud_name: str):
+        self.local = local
+        self.cloud = cloud
+        self.cloud_name = cloud_name
+
+    def decide(self, utterance: str, actions: list[Action],
+               flight_context: str = "") -> Decision:
+        decision = self.local.decide(utterance, actions, flight_context)
+        if decision.action_index is not None:
+            log.info("Settled offline - not asking %s", self.cloud_name)
+            return decision
+        if not actions:
+            return decision
+
+        log.info("Offline matcher unsure (%s) - asking %s",
+                 decision.reasoning, self.cloud_name)
+        escalated = self.cloud.decide(utterance, actions, flight_context)
+        if escalated.action_index is None:
+            # Report whichever refusal is more informative: the cloud's, if it
+            # gave a reason, else the local one that got us here.
+            return escalated if escalated.reasoning else decision
+        return escalated
+
+    @property
+    def min_confidence(self) -> float:
+        return getattr(self.local, "min_confidence", 0.0)
+
+    @min_confidence.setter
+    def min_confidence(self, value: float) -> None:
+        if hasattr(self.local, "min_confidence"):
+            self.local.min_confidence = value
+
+    def rank(self, utterance: str, actions: list[Action]):
+        """Delegate to the local matcher so the panel can still show scores."""
+        ranker = getattr(self.local, "rank", None)
+        return ranker(utterance, actions) if ranker else []
+
+
+def _build_single(name: str, cfg: Config) -> Router:
+    if name == "fuzzy":
+        return FuzzyRouter(cfg.behaviour.min_confidence)
+    if name == "claude":
+        return ClaudeRouter(cfg.llm, cfg.api_key)
+    if name == "gemini":
+        from .gemini import GeminiRouter
+        return GeminiRouter(cfg.gemini, cfg.gemini_key, SYSTEM_PROMPT)
+    raise ValueError(
+        "Unknown intent backend {b!r}. Use 'fuzzy', 'gemini' or 'claude'.".format(b=name))
+
+
 def build_router(cfg: Config) -> Router:
     backend = cfg.intent.backend.strip().lower()
-    if backend == "fuzzy":
-        log.info("Intent backend: fuzzy (offline, free)")
-        return FuzzyRouter(cfg.behaviour.min_confidence)
-    if backend == "claude":
-        log.info("Intent backend: Claude (%s)", cfg.llm.model)
-        return ClaudeRouter(cfg.llm, cfg.api_key)
-    raise ValueError(
-        "Unknown [intent] backend {b!r}. Use 'fuzzy' or 'claude'.".format(b=backend)
-    )
+    escalate = cfg.intent.escalate_to.strip().lower()
+    local = _build_single(backend, cfg)
+
+    if escalate in ("", "none") or escalate == backend:
+        log.info("Intent backend: %s", backend)
+        return local
+
+    log.info("Intent pipeline: %s offline, escalating to %s when unsure",
+             backend, escalate)
+    return CascadeRouter(local, _build_single(escalate, cfg), escalate)

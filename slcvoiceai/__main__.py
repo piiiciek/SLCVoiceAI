@@ -65,9 +65,13 @@ def main(argv: list[str] | None = None) -> int:
                 i=i, name=action.name, ctype=action.control_type, win=action.window))
         return 0
 
-    if cfg.needs_api_key:
+    # Fail fast with a clear message rather than mid-flight.
+    for needed, fetch in ((cfg.needs_api_key, lambda: cfg.api_key),
+                          (cfg.needs_gemini_key, lambda: cfg.gemini_key)):
+        if not needed:
+            continue
         try:
-            cfg.api_key  # fail fast with a clear message rather than mid-flight
+            fetch()
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 2

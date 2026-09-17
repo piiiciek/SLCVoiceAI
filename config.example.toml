@@ -2,16 +2,26 @@
 # leave out falls back to the default shown here.
 
 [intent]
-# How a spoken phrase gets matched to an SLC button.
+# How a spoken phrase becomes a button press.
 #
-# "fuzzy"  - offline string matching. Free, instant, no API key, and no VRAM
-#            beyond Whisper itself - which matters when the GPU is already
-#            busy running the simulator. Works well for phrases close to the
-#            button's own wording.
-# "claude" - the Anthropic API. Much better at loose and indirect phrasing
-#            ("tell them we're good to push"), at roughly a third of a grosz
-#            per command. Needs credit on console.anthropic.com.
+# "fuzzy"  - offline string matching plus the synonym table in aliases.py.
+#            Free, instant, no API key, no VRAM beyond Whisper.
+# "gemini" - Google Gemini. Free tier, needs GEMINI_API_KEY.
+# "claude" - the Anthropic API. Paid, needs ANTHROPIC_API_KEY.
 backend = "fuzzy"
+
+# Who to ask when the offline matcher cannot settle an utterance:
+# "none", "gemini" or "claude".
+#
+# This is the useful setting. Most commands are unambiguous - "roger",
+# "connect the jetway", "intercom" - and resolve offline at full confidence,
+# with nothing sent anywhere. Only the awkward ones travel: "super, moze byc",
+# "ok dzieki", phrasings no alias covers yet. That is a handful of requests
+# per flight rather than one per command, which keeps it inside a free tier.
+#
+# For "gemini", get a free key at https://aistudio.google.com/apikey then:
+#     setx GEMINI_API_KEY your-key
+escalate_to = "none"
 
 [audio]
 # Push-to-talk key for the BRIDGE. Keep it separate from SLC's own PTT key
@@ -69,6 +79,16 @@ beam_size = 1
 # Only used when [intent] backend = "claude".
 model = "claude-haiku-4-5"
 api_key_env = "ANTHROPIC_API_KEY"
+max_tokens = 512
+timeout_seconds = 20.0
+
+[gemini]
+# Only used when backend or escalate_to is "gemini".
+# gemini-3.1-flash-lite is the recommended free-tier model and is plenty for
+# picking one button off a short list.
+model = "gemini-3.1-flash-lite"
+fallback_model = "gemini-3.1-flash-lite"
+api_key_env = "GEMINI_API_KEY"
 max_tokens = 512
 timeout_seconds = 20.0
 

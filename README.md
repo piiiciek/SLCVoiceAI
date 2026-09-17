@@ -160,44 +160,61 @@ python -m slcvoiceai --check-hardware
 Naming a model in `config.toml` overrides all of it — an explicit choice is
 treated as a decision, not a suggestion.
 
-## Two ways to match intent
+## Matching intent: local first, cloud only if needed
 
-`[intent] backend` in `config.toml` picks how a spoken phrase becomes a button press.
+`[intent] backend` picks the matcher, and `escalate_to` decides who gets asked
+when it cannot settle an utterance.
 
-**`fuzzy`** (default) — offline string matching. Free, instant, no API key, and
-no VRAM beyond Whisper. That last point matters more than it sounds: you are
-running MSFS at the same time, and a local 7–14B model would want ~8 GB of the
-same card. Whisper's `translate` task turns your Polish into English first, so
-the matching happens against SLC's own English button names.
+**`fuzzy`** (default) — offline string matching plus the synonym table in
+`aliases.py`. Free, instant, no API key, no VRAM beyond Whisper. That last
+point matters: you are running MSFS at the same time, and a local 7–14B model
+would want ~8 GB of the same card.
 
-It handles anything close to the button's wording — *"połącz mnie z obsługą
-naziemną"* → `GROUND CREW >`, *"pasy bezpieczeństwa"* → `Seatbelts`.
+It handles anything close to a button's wording, and `aliases.py` covers the
+synonyms that string similarity cannot reach on its own — *"zrozumiałem"*
+arrives from Whisper as *"I understand"*, which shares no letters at all with
+`ROGER`. Add your own there; each entry is scored alongside the button's real
+name.
 
-Pure string similarity cannot bridge a synonym, though: *"zrozumiałem"* comes
-back from Whisper as *"I understand"*, which shares no letters at all with
-`ROGER`. `aliases.py` closes that gap with a curated table of aviation
-phraseology — understood / copy that / acknowledged all reach `ROGER`, say again
-reaches `REPEAT TRANSMISSION`, never mind reaches `DISREGARD`. Add your own
-there; each entry is scored alongside the button's real name.
+What it cannot do is follow phrasing with no shared vocabulary and no alias
+yet written. That is what escalation is for.
 
-An alias only fires when the utterance actually contains most of its words
-(`ALIAS_MIN_COVERAGE`). Without that guard the alias *"what can i say"* — which
-reduces to *"what say"* — matched *"what is the weather in Krakow today"* on the
-strength of one shared word.
+### The cascade
 
-What it still will not handle is genuinely indirect phrasing with no shared
-vocabulary at all, like *"tell them we're good to push"* when no alias covers
-it. That is what the `claude` backend is for.
+```toml
+[intent]
+backend = "fuzzy"
+escalate_to = "gemini"    # none | gemini | claude
+```
 
-**`claude`** — the Anthropic API, which does handle indirect phrasing, and can
-use flight context to disambiguate. Costs roughly a third of a grosz per
-command (about 0.20 zł per flight); needs credit on
-[console.anthropic.com](https://console.anthropic.com/) and
-`setx ANTHROPIC_API_KEY "sk-ant-..."`. Drop `min_confidence` to ~0.55 when you
-switch — that model reports calibrated confidence and declines on its own.
+Most commands are unambiguous — "roger", "connect the jetway", "intercom" —
+and resolve offline at full confidence with **nothing sent anywhere**. Only the
+awkward ones travel. In a logged flight that was a handful of utterances, not
+one per command, which is what keeps it inside a free tier.
 
-Start on `fuzzy`. It costs nothing to find out whether it is good enough for how
-you actually speak.
+The log says which path each command took:
+
+```
+Fuzzy best: 'ROGER' 1.00 (runner-up 'INTERCOM >' 0.31, margin 0.69)
+Settled offline - not asking gemini
+...
+Offline matcher unsure (Ambiguous: ...) - asking gemini
+Gemini: "THAT'S PERFECT" 0.90 - pilot is satisfied with the volume
+```
+
+The idea is lifted from [BlueLine Realism](https://youtube.com/@BlueLineVibes),
+an LSPDFR dispatch mod that solves the same problem for GTA V and logs the same
+two outcomes. Its vocabulary-hint trick is in `vocabulary.py`.
+
+**Gemini** needs a free key from [AI Studio](https://aistudio.google.com/apikey):
+
+```bash
+setx GEMINI_API_KEY your-key
+```
+
+**Claude** is the paid alternative (`ANTHROPIC_API_KEY`, roughly a third of a
+grosz per escalated command). Either way the key is yours and the billing is
+yours — see *What it costs, and who pays*.
 
 ## Use
 
@@ -297,6 +314,8 @@ slcvoiceai/
   context.py    optional flight context from SLC's stream export
   config.py     config.toml loading
   hardware.py   VRAM detection and model selection
+  vocabulary.py Whisper hint list
+  gemini.py     Gemini fallback matcher
   gui.py        tkinter control panel (--gui)
   aliases.py    synonym table for aviation phraseology
 tools/
@@ -304,6 +323,7 @@ tools/
 tests/
   test_intent.py    routing regressions, runs without SLC
   test_hardware.py  model selection across VRAM levels
+  test_cascade.py   the cloud is only asked when the local layer is unsure
 ```
 
 ```bash

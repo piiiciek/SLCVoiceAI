@@ -45,11 +45,27 @@ class SttConfig:
 
 
 @dataclass
+class GeminiConfig:
+    #: BlueLine Realism uses this model on Google's free tier and it is
+    #: plenty for picking one button off a short list.
+    model: str = "gemini-3.1-flash-lite"
+    fallback_model: str = "gemini-3.1-flash-lite"
+    api_key_env: str = "GEMINI_API_KEY"
+    max_tokens: int = 512
+    timeout_seconds: float = 20.0
+
+
+@dataclass
 class IntentConfig:
     #: "fuzzy"  - offline, free, no API key, no extra VRAM.
     #: "claude" - Anthropic API; better at loose and idiomatic phrasing, costs
     #:            roughly a third of a grosz per command.
     backend: str = "fuzzy"
+
+    #: Who to ask when the offline matcher cannot settle an utterance:
+    #: "none", "gemini" or "claude". Nothing is sent anywhere while the
+    #: local layer is confident, which is most of the time.
+    escalate_to: str = "none"
 
 
 @dataclass
@@ -85,12 +101,27 @@ class Config:
     stt: SttConfig = field(default_factory=SttConfig)
     intent: IntentConfig = field(default_factory=IntentConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
+    gemini: GeminiConfig = field(default_factory=GeminiConfig)
     slc: SlcConfig = field(default_factory=SlcConfig)
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
 
     @property
     def needs_api_key(self) -> bool:
-        return self.intent.backend == "claude"
+        return "claude" in (self.intent.backend, self.intent.escalate_to)
+
+    @property
+    def needs_gemini_key(self) -> bool:
+        return "gemini" in (self.intent.backend, self.intent.escalate_to)
+
+    @property
+    def gemini_key(self) -> str:
+        key = os.environ.get(self.gemini.api_key_env, "")
+        if not key:
+            raise RuntimeError(
+                "Environment variable {var} is not set. Get a free key at "
+                "https://aistudio.google.com/apikey then run:  setx {var} "
+                "your-key".format(var=self.gemini.api_key_env))
+        return key
 
     @property
     def api_key(self) -> str:
@@ -108,6 +139,7 @@ _SECTIONS = {
     "stt": SttConfig,
     "intent": IntentConfig,
     "llm": LlmConfig,
+    "gemini": GeminiConfig,
     "slc": SlcConfig,
     "behaviour": BehaviourConfig,
 }
