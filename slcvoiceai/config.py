@@ -28,7 +28,7 @@ class SttConfig:
 
 @dataclass
 class LlmConfig:
-    model: str = "claude-opus-5"
+    model: str = "claude-haiku-4-5"
     api_key_env: str = "ANTHROPIC_API_KEY"
     max_tokens: int = 512
     timeout_seconds: float = 20.0

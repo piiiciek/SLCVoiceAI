@@ -30,10 +30,11 @@ language = ""
 beam_size = 5
 
 [llm]
-# Default is the strongest model. If you find the round trip too slow in the
-# air, "claude-haiku-4-5" is markedly faster and easily good enough for
-# picking one button out of a short list.
-model = "claude-opus-5"
+# Haiku is the default here: picking one button out of a short list is an
+# easy task, and in the air the round-trip latency matters more than raw
+# capability. If you find it misreading loose or unusual phrasing, step up
+# to "claude-sonnet-5" or "claude-opus-5" - both are slower but sharper.
+model = "claude-haiku-4-5"
 api_key_env = "ANTHROPIC_API_KEY"
 max_tokens = 512
 timeout_seconds = 20.0
