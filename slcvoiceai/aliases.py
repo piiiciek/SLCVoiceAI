@@ -21,7 +21,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     # --- acknowledgement -------------------------------------------------
     "roger": ("understood", "i understand", "copy", "copy that", "got it",
               "acknowledged", "affirm", "affirmative", "noted", "received",
-              "okay", "alright", "sure"),
+              "ok", "okay", "alright", "sure"),
     "will do": ("wilco", "we will", "i will do that", "consider it done"),
     "thank you": ("thanks", "thanks a lot", "cheers", "much appreciated",
                   "appreciate it", "ok thanks", "okay thanks", "thanks then",

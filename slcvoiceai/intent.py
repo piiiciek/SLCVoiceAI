@@ -75,6 +75,16 @@ _PUNCT = re.compile(r"[^a-z0-9 ]+")
 #: aliases matching on one incidental shared word.
 ALIAS_MIN_COVERAGE = 0.6
 
+#: Words that open a sentence without adding to it. They are still matched
+#: against - "ok" alone is a valid acknowledgement - but they do not count
+#: when working out how much of an utterance an alias has to account for.
+#: Without this, "OK, understood" scored 0.50 against ROGER where a bare
+#: "understood" scored 1.00: the alias is one word and the sentence was two,
+#: so the reach damping halved a perfect match.
+_DISCOURSE = frozenset({
+    "ok", "okay", "alright", "well", "right", "yeah", "yep", "hmm", "so",
+})
+
 #: A decisive win can stand in for a high score. Chatter does not merely score
 #: low, it scores low *against everything* - measured over a dozen ATC and
 #: small-talk phrases, the gap between first and second place never exceeded
@@ -186,6 +196,15 @@ class FuzzyRouter:
             if coverage < ALIAS_MIN_COVERAGE:
                 continue
 
+            # An alias made only of discourse markers cannot carry a sentence
+            # that has content of its own. "alright" is registered for ROGER
+            # and "thanks" for THANK YOU, so "alright thanks" tied at 1.00 and
+            # was refused - when a person hears it as thanks with a filler in
+            # front. A bare "ok" is still an acknowledgement, so the rule
+            # lifts when the whole utterance is markers too.
+            if tokens <= _DISCOURSE and not said_tokens <= _DISCOURSE:
+                continue
+
             # A short alias must not claim a long utterance. token_set_ratio
             # scores a subset as a perfect match, so the one-word alias "send"
             # (from "send it", registered for GO AHEAD) rated "send me your
@@ -209,9 +228,12 @@ class FuzzyRouter:
         """How much of what was said can this candidate account for?
 
         token_set_ratio scores a subset as a perfect match, so a short
-        candidate claims any longer sentence containing its words.
+        candidate claims any longer sentence containing its words. Discourse
+        markers are excluded from the denominator: "ok" in front of a command
+        is not content the alias should have to cover.
         """
-        return min(1.0, len(candidate.split()) / max(len(said_tokens), 1))
+        content = said_tokens - _DISCOURSE
+        return min(1.0, len(candidate.split()) / max(len(content), 1))
 
     @staticmethod
     def _name_reach(raw_name: str, said_tokens: set[str]) -> float:
@@ -234,7 +256,8 @@ class FuzzyRouter:
         """
         if len([w for w in re.split(r"[^A-Za-z0-9]+", raw_name) if w]) > 1:
             return 1.0
-        return min(1.0, 1.0 / max(len(said_tokens), 1))
+        content = said_tokens - _DISCOURSE
+        return min(1.0, 1.0 / max(len(content), 1))
 
     def _score(self, said: str, candidate: str) -> float:
         """0.0-1.0 similarity, forgiving of word order and extra words."""

@@ -344,6 +344,50 @@ def test_filler_before_a_command_does_not_break_it(router, polite_actions,
     assert polite_actions[decision.action_index].name == expected
 
 
+#: Openers that add nothing. They must not dilute the command behind them,
+#: and must not carry a command of their own when there is one behind them.
+DISCOURSE_TRANSCRIPTS = [
+    ("OK, understood", "ROGER"),
+    ("OK, roger that", "ROGER"),
+    ("OK, never mind", "DISREGARD"),
+    ("OK, thanks.", "THANK YOU"),
+    ("OK, thanks for the information.", "THANK YOU"),
+    ("alright thanks", "THANK YOU"),
+    ("yeah go ahead", "GO AHEAD"),
+    ("ok", "ROGER"),
+]
+
+DISCOURSE_BUTTONS = POLITE_BUTTONS + ["GO AHEAD", "DISREGARD", "YES", "NO"]
+
+
+@pytest.fixture(scope="module")
+def discourse_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in DISCOURSE_BUTTONS]
+
+
+@pytest.mark.parametrize("said,expected", DISCOURSE_TRANSCRIPTS)
+def test_openers_do_not_dilute_the_command(router, discourse_actions,
+                                           said, expected):
+    """"OK, understood" scored 0.50 against ROGER where a bare "understood"
+    scored 1.00 - the reach damping counted "OK" as content the one-word
+    alias had to cover. "alright thanks" then tied ROGER against THANK YOU,
+    because "alright" is registered for one and "thanks" for the other."""
+    decision = router.decide(said, discourse_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert discourse_actions[decision.action_index].name == expected
+
+
+@pytest.mark.parametrize("said", [
+    "ok so we are cleared to land runway two seven",
+    "well the weather looks bad today",
+    "alright everyone lets get going",
+])
+def test_an_opener_does_not_turn_chatter_into_a_command(router, discourse_actions, said):
+    decision = router.decide(said, discourse_actions)
+    assert decision.action_index is None, "fired {n!r} on {s!r}".format(
+        n=discourse_actions[decision.action_index].name, s=said)
+
+
 def test_specific_key_beats_generic_one(router):
     """A button must not inherit aliases from a key it merely contains.
 
