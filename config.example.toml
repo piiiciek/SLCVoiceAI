@@ -1,0 +1,58 @@
+# Copy this file to config.toml and edit. Every key is optional; anything you
+# leave out falls back to the default shown here.
+
+[audio]
+# Push-to-talk key for the BRIDGE. Keep it separate from SLC's own PTT key
+# (SLC defaults to LeftCtrl) so the two never fight over the same press.
+# Any pynput key name works: f13, f14, scroll_lock, alt_r, ctrl_r, pause...
+ptt_key = "f13"
+
+# Substring of the input device name; empty string = Windows default.
+# Run  python -m slcvoiceai --list-devices  to see the options.
+# Watch out for virtual devices such as "Steam Streaming Microphone" -
+# they often steal the default slot and record pure silence.
+input_device = ""
+
+sample_rate = 16000
+max_seconds = 20.0
+min_seconds = 0.35      # ignore accidental taps of the PTT key
+
+[stt]
+# faster-whisper model. large-v3 is the most accurate and fits comfortably on
+# a 16 GB card; use "medium" or "small" on weaker hardware.
+model = "large-v3"
+device = "cuda"          # "cpu" also works, just slower
+compute_type = "float16" # use "int8" when device = "cpu"
+
+# "" = autodetect the language each time (recommended if you mix Polish and
+# English). Force it to "pl" or "en" if autodetect keeps guessing wrong.
+language = ""
+beam_size = 5
+
+[llm]
+# Default is the strongest model. If you find the round trip too slow in the
+# air, "claude-haiku-4-5" is markedly faster and easily good enough for
+# picking one button out of a short list.
+model = "claude-opus-5"
+api_key_env = "ANTHROPIC_API_KEY"
+max_tokens = 512
+timeout_seconds = 20.0
+
+[slc]
+process_name = "SLC.exe"
+
+# Optional but recommended. In SLC: Settings -> Export Stream Data, point it
+# at a folder, tick the fields you care about (flight phase especially), then
+# put that same folder here. It gives the model context about where in the
+# flight you are.
+stream_export_dir = ""
+
+[behaviour]
+# Below this confidence the bridge does nothing rather than guess. Raise it if
+# you get misfires, lower it if it ignores you too often.
+min_confidence = 0.55
+
+# true = decide and log, but never actually press anything. Start here.
+dry_run = false
+
+log_file = "slcvoiceai.log"

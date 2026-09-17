@@ -1,0 +1,7 @@
+anthropic>=1.0.0
+faster-whisper>=1.1.0
+sounddevice>=0.4.6
+numpy>=1.26
+pynput>=1.7.6
+uiautomation>=2.0.18
+pydantic>=2.7

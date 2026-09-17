@@ -1,0 +1,21 @@
+# local configuration (may contain machine-specific paths)
+config.toml
+
+# logs and captures
+*.log
+probe-*.txt
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# editors / os
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
