@@ -218,6 +218,26 @@ python -m slcvoiceai --list-actions
 
 ---
 
+## What it costs, and who pays
+
+Nothing, by default, for anyone.
+
+The default `fuzzy` backend touches no network at all: Whisper runs on your own
+machine and the matching is plain text comparison. You can clone this, run it,
+and use it forever without an account anywhere.
+
+If you switch to `backend = "claude"`, the requests go out under **your own**
+API key, read from your own `ANTHROPIC_API_KEY` environment variable, billed to
+your own account at roughly a third of a grosz per command. There is no server
+in this project, no shared key, and no hosted component — every install talks
+only to its own machine, and to Anthropic only if its own user set that up.
+
+That matters if you are forking or redistributing this: nobody inherits anybody
+else's bill, and the author of a fork pays nothing when others use it. The only
+way that could change is if someone committed a real API key to a repository,
+which is why `config.toml` is in `.gitignore` and the key is never read from a
+file.
+
 ## Safety
 
 Two deliberate guardrails, because a misfire mid-approach is worse than being asked to repeat yourself:
