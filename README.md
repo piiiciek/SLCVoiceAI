@@ -36,7 +36,7 @@ UI Automation: press that button
 
 SLC is a WPF application, so every button it draws is exposed in the Windows UI Automation tree with a name, an enabled flag and an Invoke pattern — the same mechanism a screen reader uses. That gives the bridge both halves of the problem: it can see exactly which commands SLC is offering at this instant, and it can trigger the one you meant.
 
-Because the available-button list is read fresh on every utterance, the bridge inherits SLC's context sensitivity for free. It can only ever press something SLC is already offering.
+The available-button list is read fresh on every utterance and filtered to what is actually on screen, so the bridge tracks SLC's context sensitivity rather than working around it. It can only ever press something SLC is already offering. (That filtering is not free — see below.)
 
 ### What this gets you
 
@@ -47,21 +47,50 @@ Because the available-button list is read fresh on every utterance, the bridge i
 
 ---
 
-## Status: unverified on the communications popup
+## Status: confirmed working
 
-**Read this before investing time.**
+The UI Automation approach is verified against a running SLC v1.6.7.3. Its
+entire control surface reads cleanly — 336 controls, with real names, not just
+opaque ids:
 
-The UI Automation approach is confirmed working against SLC's launcher window — buttons, names and enabled state all read correctly, and they are invokable. What has **not** yet been confirmed is that SLC's in-flight *communications popup* exposes its buttons the same way. If those buttons are custom-drawn on a `Canvas` without automation peers, UIA will not see them and this approach needs an OCR fallback instead.
+```
+GROUND CREW >            READY FOR PUSHBACK       START BOARDING
+RELEASE THE CABIN CREW   TAKE SEATS FOR LANDING   TURN THE MUSIC UP
+```
 
-Find out in two minutes before you configure anything else:
+Those are exactly SLC's voice commands, which is what makes routing to them
+tractable.
+
+### The catch, and how it is handled
+
+SLC keeps its **whole** command tree alive in the WPF visual tree at all times.
+Every one of those 336 buttons reports `IsEnabled=True` and `IsOffscreen=True`
+whether or not you can currently use it, so neither property tells you what is
+actually on offer. Handing all of them to the model would let it announce the
+descent while you are still parked at the gate.
+
+The property that does discriminate is the **bounding rectangle**: live controls
+have a real one, collapsed controls are `0x0`. `is_visible()` in
+`slcvoiceai/slc_ui.py` filters on exactly that, which is what restores SLC's
+context sensitivity — 335 controls in the tree, 33 on screen during flight setup,
+22 back at the launcher, tracking live as the UI changes.
+
+Two SLC quirks worth knowing if you extend this:
+
+- **Toolbar buttons are icon-only** and carry no accessible name at all, just an
+  `AutomationId` like `cmdToggleDoorMode`. `humanise_id()` turns those back into
+  `Toggle Door Mode`.
+- **`IsOffscreen` is useless here** — it is `True` for everything, visible or not.
+
+Check it yourself at any time:
 
 ```bash
 python tools/probe_slc.py --watch
+python -m slcvoiceai --list-actions
 ```
 
-Start a flight, open the communications menu, and watch the output. If you see your comms options listed as `[Button]` entries with `patterns=Invoke`, the bridge will work. If the popup shows up as an empty or nameless subtree, it will not — please open an issue with the probe output.
-
-The probe also takes `--process` if you want to point it at something else to confirm your setup is sane before SLC is even running:
+The probe also takes `--process` if you want to sanity-check your setup against
+another app before SLC is even running:
 
 ```bash
 python tools/probe_slc.py --process chrome.exe --depth 6
@@ -134,7 +163,8 @@ python -m slcvoiceai --list-actions
 
 Two deliberate guardrails, because a misfire mid-approach is worse than being asked to repeat yourself:
 
-- **Denylist.** Destructive or session-ending controls — `EXIT SELF-LOADING CARGO`, `DELETE`, `RESET` and friends — are filtered out of the list before the model ever sees them. It cannot press what it cannot see. The list lives in `slcvoiceai/slc_ui.py`.
+- **Visibility filter.** The model is only ever shown controls SLC is currently displaying, so it cannot reach a command that is out of context for the phase of flight.
+- **Denylist.** Session-ending and flight-destroying controls — `EXIT SELF-LOADING CARGO`, `CLOSE SELF-LOADING CARGO`, `CANCEL SINGLE FLIGHT`, `DISPATCH NEXT FLIGHT`, `DO NOT RESTORE PREVIOUS FLIGHT` and friends — are stripped before the model ever sees them. It cannot press what it cannot see. The list lives in `slcvoiceai/slc_ui.py`.
 - **Confidence floor.** Below `min_confidence` (default `0.55`) the bridge does nothing and logs why. The model is also explicitly instructed that declining is a valid answer.
 
 ## Privacy

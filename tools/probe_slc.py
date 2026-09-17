@@ -68,9 +68,15 @@ def walk(node, depth: int = 0, max_depth: int = 25, out=None):
     if depth > max_depth:
         return out
 
-    ctype = node.ControlTypeName
-    name = (node.Name or "").strip()
-    aid = (node.AutomationId or "").strip()
+    try:
+        ctype = node.ControlTypeName
+        name = (node.Name or "").strip()
+        aid = (node.AutomationId or "").strip()
+    except Exception as exc:
+        # SLC's popup can close while we are walking it; the element goes stale
+        # and every property access throws.
+        out.append("  " * depth + "  !! stale element: " + str(exc))
+        return out
 
     if name or aid or ctype in INTERESTING:
         enabled = getattr(node, "IsEnabled", None)
@@ -139,10 +145,16 @@ def main() -> int:
     def emit(text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
         block = "\n----- snapshot {stamp} -----\n{text}\n".format(stamp=stamp, text=text)
-        print(block)
+        # Write the file first: it is the artefact that matters, and a console
+        # that cannot encode a control name (cp1250, cp852, ...) must never
+        # take the run down with it.
         if args.out:
             with open(args.out, "a", encoding="utf-8") as fh:
                 fh.write(block)
+        try:
+            print(block)
+        except UnicodeEncodeError:
+            print(block.encode("ascii", "replace").decode("ascii"))
 
     if not args.watch:
         emit(snapshot(args.depth, args.process))
@@ -151,7 +163,12 @@ def main() -> int:
     print("Watching SLC. Open the communications popup now. Ctrl+C to stop.\n")
     try:
         while True:
-            emit(snapshot(args.depth, args.process))
+            try:
+                emit(snapshot(args.depth, args.process))
+            except Exception as exc:
+                # One bad snapshot (a window closing mid-walk, a COM hiccup)
+                # must not end a watch the user left running for a whole flight.
+                emit("snapshot failed: {t}: {e}".format(t=type(exc).__name__, e=exc))
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("\nStopped.")

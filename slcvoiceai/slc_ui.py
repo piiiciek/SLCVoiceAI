@@ -22,8 +22,17 @@ log = logging.getLogger(__name__)
 # Controls the bridge must never press, however the model phrases its intent.
 # Matched case-insensitively as substrings of the control name.
 DENYLIST = (
+    # Ends the session outright.
     "exit self-loading cargo",
+    "close self-loading cargo",
     "exit slc",
+    "close slc",
+    # Throws away the flight you are in the middle of.
+    "cancel single flight",
+    "do not restore previous flight",
+    "dispatch next flight",
+    # Licensing, settings and chrome - never something you "say".
+    "activate self-loading cargo",
     "join discord",
     "user manual",
     "apply changes and exit",
@@ -112,6 +121,84 @@ def is_denied(name: str) -> bool:
     return any(bad in low for bad in DENYLIST)
 
 
+#: AutomationId prefixes SLC uses for its controls, stripped when we humanise.
+_ID_PREFIXES = ("cmd", "btn", "img", "chk", "tgl")
+
+
+def humanise_id(automation_id: str) -> str:
+    """Turn 'cmdToggleDoorMode' into 'Toggle Door Mode'.
+
+    Most of SLC's toolbar buttons are icon-only: they carry no accessible
+    name at all, just an AutomationId. Those ids are descriptive enough to
+    route on once split back into words.
+    """
+    ident = automation_id.strip()
+    if not ident:
+        return ""
+    for prefix in _ID_PREFIXES:
+        if ident.lower().startswith(prefix) and len(ident) > len(prefix):
+            ident = ident[len(prefix):]
+            break
+
+    words: list[str] = []
+    current = ""
+    for char in ident:
+        if char in "_-":
+            if current:
+                words.append(current)
+                current = ""
+            continue
+        # Start a new word at a lower->upper transition, but keep runs of
+        # capitals together so "PA" and "GSX" survive intact.
+        if char.isupper() and current and not current[-1].isupper():
+            words.append(current)
+            current = char
+        else:
+            current += char
+    if current:
+        words.append(current)
+    return " ".join(w for w in words if w).strip()
+
+
+def is_visible(control) -> bool:
+    """Is this control actually on screen right now?
+
+    SLC keeps its entire command tree alive in the WPF visual tree - all ~336
+    buttons, every one of them reporting IsEnabled=True and IsOffscreen=True
+    whether or not the pilot can currently use it. The only property that
+    actually distinguishes "on screen" from "collapsed" is the bounding
+    rectangle: live controls have a real one, hidden controls are 0x0.
+
+    This is what keeps the bridge honest about context. Without it the model
+    would be offered every command in the game at once and could fire a
+    descent announcement while still at the gate.
+    """
+    try:
+        rect = control.BoundingRectangle
+    except Exception:
+        return False
+    if rect is None:
+        return False
+    try:
+        return (rect.right - rect.left) > 0 and (rect.bottom - rect.top) > 0
+    except Exception:
+        return False
+
+
+def label_for(control) -> str:
+    """Best human-readable label for a control: its name, else its id."""
+    try:
+        name = (control.Name or "").strip()
+    except Exception:
+        name = ""
+    if len(name) >= 2:
+        return name
+    try:
+        return humanise_id(control.AutomationId or "")
+    except Exception:
+        return ""
+
+
 class SlcUI:
     """A live view of what Self-Loading Cargo can currently be told to do."""
 
@@ -134,11 +221,15 @@ class SlcUI:
             log.error("Could not enumerate windows: %s", exc)
         return found
 
-    def list_actions(self, include_disabled: bool = False) -> list[Action]:
-        """Every invokable, permitted control across all SLC windows.
+    def list_actions(self, include_disabled: bool = False,
+                     include_hidden: bool = False) -> list[Action]:
+        """Every control SLC is actually offering the pilot right now.
 
         Re-walks the tree on every call: SLC's communications popup appears
         and disappears constantly, and stale UIA references throw.
+
+        Pass include_hidden=True to get the whole command tree instead - only
+        useful for exploring what SLC can do, never for routing a command.
         """
         actions: list[Action] = []
         seen: set[tuple[str, str]] = set()
@@ -149,11 +240,15 @@ class SlcUI:
                 try:
                     if not _is_activatable(ctl):
                         continue
-                    name = (ctl.Name or "").strip()
+                    # Most SLC toolbar buttons are icon-only and carry no
+                    # accessible name - fall back to their AutomationId.
+                    name = label_for(ctl)
                     if len(name) < 2:
                         continue
                     enabled = bool(getattr(ctl, "IsEnabled", True))
                     if not enabled and not include_disabled:
+                        continue
+                    if not include_hidden and not is_visible(ctl):
                         continue
                     if is_denied(name):
                         log.debug("Skipping denylisted control %r", name)
