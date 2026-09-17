@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -51,7 +52,7 @@ class PushToTalk:
         self.key = _parse_key(cfg.ptt_key)
         self.device = resolve_device(cfg.input_device)
         self._held = threading.Event()
-        self._clips: queue.Queue[np.ndarray] = queue.Queue()
+        self._clips: queue.Queue = queue.Queue()
         self._listener: keyboard.Listener | None = None
         self._worker: threading.Thread | None = None
         self._stop = threading.Event()
@@ -72,12 +73,30 @@ class PushToTalk:
             self._listener.stop()
 
     def clips(self):
-        """Yield one float32 numpy array per completed PTT press."""
+        """Yield captured audio, newest only, discarding any backlog.
+
+        If transcription falls behind - a saturated GPU will do it - queued
+        utterances are stale by the time they decode, and pressing a button
+        for a command given a minute ago is worse than not pressing at all.
+        Yields (captured_at, audio) so the caller can refuse stale work.
+        """
         while not self._stop.is_set():
             try:
-                yield self._clips.get(timeout=0.25)
+                item = self._clips.get(timeout=0.25)
             except queue.Empty:
                 continue
+
+            dropped = 0
+            while True:
+                try:
+                    item = self._clips.get_nowait()
+                    dropped += 1
+                except queue.Empty:
+                    break
+            if dropped:
+                log.warning("Discarded %d queued utterance(s) - transcription is "
+                            "falling behind; only the newest is used", dropped)
+            yield item
 
     # -- internals ---------------------------------------------------------
     def _on_press(self, key) -> None:
@@ -127,4 +146,4 @@ class PushToTalk:
                 log.debug("Clip too short (%.2fs), ignored", duration)
                 continue
             log.info("Captured %.2fs of audio", duration)
-            self._clips.put(clip)
+            self._clips.put((time.time(), clip))

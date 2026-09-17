@@ -19,7 +19,7 @@ class AudioConfig:
 
 @dataclass
 class SttConfig:
-    model: str = "large-v3"
+    model: str = "small"
     device: str = "cuda"            # "cuda" or "cpu"
     compute_type: str = "float16"   # "int8" is a good CPU fallback
     language: str = ""              # "" = autodetect, "pl" / "en" to force
@@ -67,6 +67,10 @@ class BehaviourConfig:
     min_confidence: float = 0.65
     dry_run: bool = False
     speak_feedback: bool = False
+    #: Refuse to act on a command that took longer than this to transcribe.
+    #: 0 disables the check.
+    max_command_age_seconds: float = 12.0
+
     log_file: str = "slcvoiceai.log"
 
 

@@ -294,9 +294,9 @@ class App:
             ptt.start()
             self.bridge, self.ptt = bridge, ptt
             self.root.after(0, self._started)
-            for clip in ptt.clips():
+            for captured_at, clip in ptt.clips():
                 try:
-                    bridge.handle(clip)
+                    bridge.handle(clip, captured_at)
                 except Exception:
                     log.exception("Failed to handle an utterance; continuing.")
         except Exception as exc:

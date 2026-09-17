@@ -38,10 +38,22 @@ class Bridge:
         from .stt import Transcriber
         self.stt = Transcriber(cfg.stt)
 
-    def handle(self, audio) -> None:
+    def handle(self, audio, captured_at: float | None = None) -> None:
         started = time.time()
 
         text, language = self.stt.transcribe(audio)
+
+        # Transcription can take far longer than expected when the simulator
+        # is starving the GPU. A command that old no longer reflects what the
+        # pilot wants pressed, so drop it rather than fire it late.
+        if captured_at is not None:
+            age = time.time() - captured_at
+            limit = self.cfg.behaviour.max_command_age_seconds
+            if limit and age > limit:
+                log.warning("Ignoring %r - it took %.1fs to transcribe, older "
+                            "than the %.0fs limit", text, age, limit)
+                return
+
         if not text:
             log.info("Nothing intelligible in that clip.")
             return
@@ -98,9 +110,9 @@ class Bridge:
             log.warning("SLC is not running yet - start it whenever you like.")
 
         try:
-            for clip in ptt.clips():
+            for captured_at, clip in ptt.clips():
                 try:
-                    self.handle(clip)
+                    self.handle(clip, captured_at)
                 except Exception:
                     log.exception("Failed to handle an utterance; continuing.")
         except KeyboardInterrupt:

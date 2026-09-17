@@ -30,9 +30,19 @@ max_seconds = 20.0
 min_seconds = 0.35      # ignore accidental taps of the PTT key
 
 [stt]
-# faster-whisper model. large-v3 is the most accurate and fits comfortably on
-# a 16 GB card; use "medium" or "small" if the simulator needs the VRAM.
-model = "large-v3"
+# faster-whisper model. "small" is the default for a reason: MSFS 2024 uses
+# almost all of a 16 GB card, and large-v3 then fights it for the last few
+# hundred MB. Measured with the simulator running, per command:
+#
+#   small    on cuda   0.96s      <- default
+#   large-v3 on cuda    2.25s, spiking to 92s under memory pressure
+#   base     on cpu     1.64s
+#   small    on cpu     5.38s
+#   medium   on cpu    16.29s
+#
+# All of them transcribed the test phrase correctly. large-v3 is better at
+# Polish, so raise it if your GPU has room; drop to "base" if it does not.
+model = "small"
 device = "cuda"          # "cpu" also works, just slower
 compute_type = "float16" # use "int8" when device = "cpu"
 
@@ -80,6 +90,12 @@ stream_export_dir = ""
 # On backend = "claude" this can go lower (~0.55); that model reports
 # calibrated confidence and declines on its own.
 min_confidence = 0.65
+
+# Refuse to act on a command that took longer than this to transcribe. If the
+# GPU stalls, a decoded command can be a minute old by the time it lands, and
+# pressing a button for something you said a minute ago is worse than missing
+# it. 0 disables the check.
+max_command_age_seconds = 12.0
 
 # true = decide and log, but never actually press anything. Start here.
 dry_run = false
