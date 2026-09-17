@@ -207,6 +207,19 @@ def test_decisive_margin_accepts_a_clear_but_low_score(router, opposite_actions)
     assert opposite_actions[decision.action_index].name == "GSX, START CATERING"
 
 
+def test_short_alias_cannot_claim_a_long_utterance(router, opposite_actions):
+    """A one-word alias must not outrank the button that actually matches.
+
+    "send it" is registered for GO AHEAD and reduces to the single word
+    "send"; token_set_ratio scores a subset as perfect, so it tied with
+    GSX, START CATERING on "Send me your catering" and the pair was refused
+    as ambiguous.
+    """
+    decision = router.decide("Send me your catering.", opposite_actions)
+    assert decision.action_index is not None
+    assert opposite_actions[decision.action_index].name == "GSX, START CATERING"
+
+
 def test_empty_action_list_declines(router):
     assert router.decide("intercom", []).action_index is None
 

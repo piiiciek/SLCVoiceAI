@@ -64,7 +64,8 @@ class Router(Protocol):
 _NOISE = {
     "the", "a", "an", "to", "for", "of", "and", "is", "are", "be", "please",
     "our", "your", "we", "i", "it", "that", "this", "will", "can", "could",
-    "would", "you", "us", "them", "slc", "captain", "cockpit",
+    "would", "you", "us", "them", "slc", "captain", "cockpit", "me", "my",
+    "some", "just", "now", "there",
 }
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
@@ -181,7 +182,15 @@ class FuzzyRouter:
             coverage = len(tokens & said_tokens) / len(tokens)
             if coverage < ALIAS_MIN_COVERAGE:
                 continue
-            score = self._score(said, candidate)
+
+            # A short alias must not claim a long utterance. token_set_ratio
+            # scores a subset as a perfect match, so the one-word alias "send"
+            # (from "send it", registered for GO AHEAD) rated "send me your
+            # catering" 1.00 - tying with the button that actually meant it.
+            # Damp by how much of the utterance the alias can account for.
+            said_len = max(len(said_tokens), 1)
+            reach = min(1.0, len(tokens) / said_len)
+            score = self._score(said, candidate) * reach
             if score > best:
                 best = score
 
