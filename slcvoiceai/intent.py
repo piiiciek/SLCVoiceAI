@@ -66,6 +66,12 @@ _NOISE = {
     "our", "your", "we", "i", "it", "that", "this", "will", "can", "could",
     "would", "you", "us", "them", "slc", "captain", "cockpit", "me", "my",
     "some", "just", "now", "there",
+    # A preposition like the ones above, and the only reason "5 by 5" - the
+    # standard answer to a radio check - scored 0.67 against 'Stand By' and
+    # pressed it in flight. One shared preposition was carrying the whole
+    # match. 'Stand By' still matches on "stand", and "wait", "hold on" and
+    # the rest reach it through the alias table either way.
+    "by",
     # "press the button to..." is how a person describes using a UI, not part
     # of what they want done. No SLC control carries the word except the one
     # that toggles the toolbar, which is denylisted for exactly this reason.

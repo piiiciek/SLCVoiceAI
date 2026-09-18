@@ -19,24 +19,31 @@ This bridge sidesteps all three by taking the speech recognition out of SLC's ha
 ## How it works
 
 ```
-your microphone
-      │   hold the bridge's own PTT key
-      ▼
-faster-whisper (local, on your GPU)
-      │   free-form transcript, any language
-      ▼
-UI Automation: read SLC's live button list
-      │   ["Request Pushback", "Ready For Departure", ...]
-      ▼
-Claude: which button did the pilot mean?
-      │   with a confidence score, and free to decline
-      ▼
-UI Automation: press that button
+press and hold the PTT key
+      │
+      ├──────────────────────────►  UI Automation: read SLC's live
+      │                             button list, while you are still
+ you speak                          speaking
+      │                                        │
+release the key                                │
+      │                                        │
+      ▼                                        │
+faster-whisper (local, on your GPU)            │
+      │   free-form transcript, any language   │
+      └────────────────────┬───────────────────┘
+                           ▼
+        which button did the pilot mean?
+        local matcher first, cloud only if unsure
+                           │   a confidence score, and free to decline
+                           ▼
+        UI Automation: press that button
 ```
 
 SLC is a WPF application, so every button it draws is exposed in the Windows UI Automation tree with a name, an enabled flag and an Invoke pattern — the same mechanism a screen reader uses. That gives the bridge both halves of the problem: it can see exactly which commands SLC is offering at this instant, and it can trigger the one you meant.
 
 The available-button list is read fresh on every utterance and filtered to what is actually on screen, so the bridge tracks SLC's context sensitivity rather than working around it. It can only ever press something SLC is already offering. (That filtering is not free — see below.)
+
+Note the fork at the top. Reading SLC takes about as long as a short sentence, and the button list does not depend on what you are about to say — so it is read *while* you say it, starting the moment the key goes down. By the time you let go it is usually already done.
 
 ### What this gets you
 
@@ -95,6 +102,41 @@ another app before SLC is even running:
 ```bash
 python tools/probe_slc.py --process chrome.exe --depth 6
 ```
+
+### What that reading costs, and why you do not wait for it
+
+Reading SLC's window is the slowest thing the bridge does — around 1.4s, against
+roughly 1s to transcribe a short sentence. It used to sit squarely in the wait:
+you let go of the key, and only then did the bridge start asking SLC what was on
+offer. Two changes took it out of the wait entirely.
+
+**The scan starts with the key, not with the clip.** It runs during the
+utterance, so by the time you stop speaking the button list is already in hand.
+Measured over a flight, the time from releasing the key to SLC reacting went from
+a median of 4.0s to 1.1s — and per command, the time spent on anything other than
+transcription is now near zero:
+
+```
+transcription 0.82s   whole command 0.8s   everything else -0.02s
+transcription 1.45s   whole command 1.5s   everything else  0.05s
+transcription 1.10s   whole command 1.1s   everything else  0.00s
+```
+
+Set `prescan = false` under `[behaviour]` if you would rather the list were read
+strictly after you stop talking. `max_scan_age_seconds` bounds how stale that
+list may get if you hold the key through a very long sentence; past it, SLC is
+read again.
+
+**Finding SLC's windows goes through Win32, not UIA.** Asking UI Automation for
+the desktop's children and reading a process id off each cost 0.5s of that scan
+on its own. `EnumWindows` answers the same question in 0.009s, and only the
+handles that turn out to be SLC's are handed to UIA. If that lookup ever comes
+up empty the old one still runs before the bridge concludes SLC is not there —
+an empty result reads downstream as "SLC is offering no buttons", and that is
+not a conclusion worth reaching quickly.
+
+Caching the UIA tree, which looks like the obvious next step, is a dead end —
+`tools/probe_cache.py` says why, and measures it against your own SLC.
 
 ---
 
@@ -319,11 +361,17 @@ slcvoiceai/
   gui.py        tkinter control panel (--gui)
   aliases.py    synonym table for aviation phraseology
 tools/
-  probe_slc.py  standalone UIA diagnostic
+  probe_slc.py    standalone UIA diagnostic
+  probe_cache.py  ways of reading the UIA tree, measured against each other
+  close_slc.py    close SLC, answering its "are you sure?" dialog
 tests/
   test_intent.py    routing regressions, runs without SLC
   test_hardware.py  model selection across VRAM levels
   test_cascade.py   the cloud is only asked when the local layer is unsure
+  test_scan.py      the scan behaves as if it had not run in the background
+  test_prescan.py   one key press, one scan, reused once
+  test_windows.py   finding SLC's windows, and the windows to ignore
+  test_config_keys.py  API keys: resolved, masked, never committed
 ```
 
 ```bash
@@ -341,6 +389,20 @@ python -m pytest tests/ -q
 **Nothing is transcribed** — wrong input device. `--list-devices`, then set `input_device` explicitly.
 
 **It presses the wrong thing** — raise `min_confidence`, and enable `stream_export_dir` so the model knows what phase of flight you are in.
+
+**A phrase you keep saying never lands** — look it up in the log first. Every
+utterance prints what Whisper actually heard, the full list of buttons SLC was
+offering, and the score of the best match. That usually shows the problem in one
+line: the button was not on offer at all, or the translation shares no words with
+it.
+
+The second case is what `aliases.py` is for. Whisper translates, so Polish
+"piec na piec" arrives as "5 by 5" — not one word of which appears in
+`LOUD AND CLEAR`, while `Stand By` happened to share "by". String similarity
+compares spelling, not meaning; the alias table closes that gap without a model
+or a network call. Add your phrase under the button it means, add a case to
+`tests/test_intent.py` using the exact text from the log, and the gap stays
+closed.
 
 ---
 

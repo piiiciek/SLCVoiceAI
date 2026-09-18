@@ -558,3 +558,94 @@ def test_normalise_strips_button_decoration():
     assert normalise("GROUND CREW >") == "ground crew"
     assert normalise("CABIN CREW ARE CALLING...") == "cabin crew calling"
     assert normalise("Please take your seats") == "take seats"
+
+
+# -- radio check and dismissal, captured in flight 2026-09-18 -------------
+
+#: Exactly what SLC offered at 08:51:51, answering a radio check.
+RADIO_BUTTONS = [
+    "Notifications", "Toggle Door Mode", "Seatbelts", "Inflight Services",
+    "Aircraft Layout", "Available Phrases Window", "Narration Window",
+    "Check List", "Settings", "Stand By", "Toggle Doors", "Tannoy",
+    "Start New Passenger Flight", "Start New Simple Passenger Flight",
+    "AUDIO MANAGER", "GROUND CREW >", "INTERCOM >", "P A SYSTEM >", "PHONE >",
+    "LOUD AND CLEAR", "REPEAT TRANSMISSION", "BACK",
+]
+
+#: And at 08:52:43, mid ground-crew exchange.
+GROUND_BUTTONS = [
+    "Notifications", "Toggle Door Mode", "Seatbelts", "Inflight Services",
+    "Aircraft Layout", "Available Phrases Window", "Narration Window",
+    "Check List", "Settings", "Stand By", "Toggle Doors", "Tannoy",
+    "Start New Passenger Flight", "Start New Simple Passenger Flight",
+    "AUDIO MANAGER", "GROUND CREW >", "INTERCOM >", "P A SYSTEM >", "PHONE >",
+    "CONNECT JETWAY", "DISCONNECT JETWAY", "REQUEST LOADING UPDATE",
+    "STARTING THE APU", "RADIO CHECK", "STANDBY", "DISREGARD", "BACK",
+]
+
+
+@pytest.fixture(scope="module")
+def radio_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in RADIO_BUTTONS]
+
+
+@pytest.fixture(scope="module")
+def ground_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in GROUND_BUTTONS]
+
+
+#: Whisper's translation of Polish "piec na piec" and "slychac dobrze".
+RADIO_ANSWERS = [
+    ("5 by 5", "LOUD AND CLEAR"),
+    ("5 to 5, good to hear", "LOUD AND CLEAR"),
+    ("five by five", "LOUD AND CLEAR"),
+    ("hear loud and clear", "LOUD AND CLEAR"),
+    ("i hear you well", "LOUD AND CLEAR"),
+]
+
+
+@pytest.mark.parametrize("said,expected", RADIO_ANSWERS)
+def test_answering_a_radio_check_routes(router, radio_actions, said, expected):
+    """'5 by 5' is the standard answer to a radio check, and it shares a word
+    with 'Stand By' and nothing at all with 'LOUD AND CLEAR'. It pressed
+    Stand By in flight - a wrong button, not a decline."""
+    decision = router.decide(said, radio_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert radio_actions[decision.action_index].name == expected
+    assert decision.confidence >= THRESHOLD
+
+
+#: Whisper's translation of Polish "nie wazne".
+DISMISSALS = [
+    ("ok, not important", "DISREGARD"),
+    ("doesnt matter", "DISREGARD"),
+    ("it doesnt matter", "DISREGARD"),
+    ("not important", "DISREGARD"),
+]
+
+
+@pytest.mark.parametrize("said,expected", DISMISSALS)
+def test_waving_something_away_reaches_disregard(router, ground_actions,
+                                                 said, expected):
+    decision = router.decide(said, ground_actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert ground_actions[decision.action_index].name == expected
+
+
+def test_five_by_five_does_not_fall_back_onto_stand_by(router):
+    """The alias fixes the flight case, but the trap underneath it remains:
+    '5 by 5' shares a word with 'Stand By'. With LOUD AND CLEAR off screen
+    the answer is to say nothing, not to press the button that rhymes."""
+    without = [FakeAction(n) for n in RADIO_BUTTONS if n != "LOUD AND CLEAR"]
+    decision = router.decide("5 by 5", without)
+    if decision.action_index is not None:
+        assert without[decision.action_index].name != "Stand By"
+
+
+def test_waving_away_declines_when_disregard_is_absent(router, radio_actions):
+    """RADIO_BUTTONS has no DISREGARD. Nothing there means 'never mind'."""
+    for said in ("ok, not important", "doesnt matter"):
+        decision = router.decide(said, radio_actions)
+        assert decision.action_index is None, (
+            "pressed {n!r} for {s!r}".format(
+                n=radio_actions[decision.action_index].name, s=said))

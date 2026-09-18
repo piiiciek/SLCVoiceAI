@@ -47,12 +47,26 @@ ALIASES: dict[str, tuple[str, ...]] = {
                 "give me a moment", "wait a moment"),
     "repeat transmission": ("say again", "repeat", "repeat that",
                             "i didnt catch that", "come again", "once more"),
-    "disregard": ("never mind", "forget it", "ignore that", "cancel that",
-                  "scratch that", "forget what i said"),
+    # Polish "nie wazne" comes back as "not important" or "Doesn't matter".
+    # Both were declined in flight - offline as too weak, then by Gemini as
+    # the pilot dismissing a thought rather than instructing anyone. Waving
+    # the exchange away IS the instruction, and DISREGARD is its button.
+    "disregard": ("never mind", "nevermind", "forget it", "ignore that",
+                  "cancel that", "scratch that", "forget what i said",
+                  "not important", "its not important", "doesnt matter",
+                  "it doesnt matter", "does not matter", "no matter",
+                  "forget about it", "leave it"),
     "radio check": ("how do you read", "do you read me", "check radio",
                     "mic check", "microphone check"),
+    # "piec na piec" - the standard answer to a radio check - translates as
+    # "5 by 5" or "5 to 5". It shares not one word with LOUD AND CLEAR, and
+    # it does share one with 'Stand By', so in flight it pressed Stand By:
+    # a wrong button rather than a decline, which is the worse failure.
     "loud and clear": ("i hear you", "reading you five", "hear you fine",
-                       "you are clear"),
+                       "you are clear", "five by five", "5 by 5", "5 to 5",
+                       "five to five", "good to hear", "i hear you well",
+                       "hear you well", "hear you loud and clear",
+                       "reading you loud and clear", "signal is good"),
 
     # --- channels --------------------------------------------------------
     "ground crew": ("ground", "ground staff", "ground handling",
