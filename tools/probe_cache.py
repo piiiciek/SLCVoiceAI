@@ -61,9 +61,10 @@ P_INVOKE = UIA.UIA_IsInvokePatternAvailablePropertyId
 P_TOGGLE = UIA.UIA_IsTogglePatternAvailablePropertyId
 P_SELECT = UIA.UIA_IsSelectionItemPatternAvailablePropertyId
 P_ISCTL = UIA.UIA_IsControlElementPropertyId
+P_HELP = UIA.UIA_HelpTextPropertyId
 
 CACHED = (P_NAME, P_AID, P_CTYPE, P_ENABLED, P_RECT,
-          P_INVOKE, P_TOGGLE, P_SELECT, P_ISCTL)
+          P_INVOKE, P_TOGGLE, P_SELECT, P_ISCTL, P_HELP)
 
 
 _API = None
@@ -153,6 +154,13 @@ def actions_from_cached(elements, win_name, stats, seen):
             if not cached_activatable(el):
                 continue
             if slc_ui.is_denied(label):
+                continue
+            # Production checks the tooltip as well, because some of these
+            # labels are humanise_id's invention rather than SLC's own -
+            # cmdStandBy reads as 'Stand By' and closes SLC. Without this the
+            # probe reports that button as one production is missing.
+            hint = el.GetCachedPropertyValue(P_HELP) or ""
+            if hint and slc_ui.is_denied(hint):
                 continue
             key = (win_name, label.lower())
             if key in seen:
@@ -368,7 +376,8 @@ def strat_level_cache(process_name, props=CACHED):
 
 #: The properties production actually consults. ControlType is only used for
 #: a display string and IsControlElement is not used at all.
-LEAN = (P_NAME, P_AID, P_ENABLED, P_RECT, P_INVOKE, P_TOGGLE, P_SELECT)
+LEAN = (P_NAME, P_AID, P_ENABLED, P_RECT, P_INVOKE, P_TOGGLE,
+        P_SELECT, P_HELP)
 
 
 def strat_level_lean(p):
