@@ -60,6 +60,12 @@ WINDOW_DENYLIST = (
     "settings window",
     "voice recognition prompt window",
     "audio manager",
+    # SLC asks "Exit Self-Loading Cargo?" before quitting, and the buttons on
+    # that dialog are named in the user's Windows language - 'Tak' and 'Nie'
+    # on a Polish install. Nothing in DENYLIST catches those, so the one
+    # button that ends the flight outright would otherwise be on offer under
+    # a name no denylist can anticipate.
+    "exit self-loading cargo",
 )
 
 

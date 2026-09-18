@@ -154,3 +154,33 @@ def test_is_running_reports_false_rather_than_raising(monkeypatch):
 
     monkeypatch.setattr(slc_ui, "_handles_of_process", always_bad)
     assert slc_ui.SlcUI("SLC.exe").is_running() is False
+
+
+# -- windows the bridge must not take commands from -----------------------
+
+def test_the_exit_confirmation_is_never_a_source_of_commands():
+    """SLC asks 'Exit Self-Loading Cargo?' before quitting, and that dialog's
+    buttons are named in the Windows display language - 'Tak' and 'Nie' on a
+    Polish install, 'Yes' and 'No' on an English one. No button denylist can
+    cover every language, so the window has to be refused as a whole."""
+    assert slc_ui.is_denied_window("Exit Self-Loading Cargo?")
+    assert slc_ui.is_denied_window("exit self-loading cargo?")
+
+
+def test_the_configuration_windows_are_still_refused():
+    for title in ("Settings Window", "Audio Manager",
+                  "Voice Recognition Prompt Window"):
+        assert slc_ui.is_denied_window(title), title
+
+
+def test_the_flight_windows_are_not_refused():
+    """The denylist is a denylist on purpose: SLC puts real, voice-worthy
+    controls in satellite windows, and an allowlist would cut them off."""
+    for title in ("Scoring CheckList Window", "Self-Loading Cargo",
+                  "Tannoy", "Cabin Management"):
+        assert not slc_ui.is_denied_window(title), title
+
+
+def test_an_untitled_window_is_not_refused():
+    assert not slc_ui.is_denied_window("")
+    assert not slc_ui.is_denied_window(None)
