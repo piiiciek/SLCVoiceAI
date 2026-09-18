@@ -136,6 +136,53 @@ def _is_activatable(control) -> bool:
     return any(_get_pattern(control, pid) is not None for pid in ACTIVATION_PATTERNS)
 
 
+_USER32 = ctypes.WinDLL("user32", use_last_error=True)
+_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+
+def _visible_windows_with_pids() -> list[tuple[int, int]]:
+    """(handle, process id) for every visible top-level window on the desktop.
+
+    Hidden windows are left out deliberately. A process of SLC's size keeps
+    dozens of them alive - IME frames, broadcast sinks, video handlers - and
+    walking into their trees would cost time to find nothing.
+    """
+    found: list[tuple[int, int]] = []
+
+    def visit(hwnd, _lparam):
+        # An exception raised inside a ctypes callback cannot propagate: it
+        # would be printed and swallowed, and the enumeration would carry on
+        # regardless. Keep it from happening at all.
+        try:
+            if _USER32.IsWindowVisible(hwnd):
+                pid = wintypes.DWORD()
+                _USER32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value:
+                    found.append((hwnd, pid.value))
+        except Exception:
+            pass
+        return True
+
+    callback = _WNDENUMPROC(visit)
+    _USER32.EnumWindows(callback, 0)
+    return found
+
+
+def _handles_of_process(process_name: str, listing=None) -> list[int]:
+    """Which of those windows belong to a process with this name."""
+    if listing is None:
+        listing = _visible_windows_with_pids()
+    target = process_name.strip().lower()
+    names: dict[int, str] = {}
+    handles = []
+    for hwnd, pid in listing:
+        if pid not in names:
+            names[pid] = _process_name(pid).lower()
+        if names[pid] == target:
+            handles.append(hwnd)
+    return handles
+
+
 def _process_name(pid: int) -> str:
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -251,6 +298,14 @@ class SlcUI:
     def windows(self, attempts: int = 3) -> list:
         """Top-level windows owned by SLC.
 
+        Found through Win32 and then handed to UI Automation one handle at a
+        time. Asking UIA for the desktop's children and reading a process id
+        off each cost about half a second on every single command - a quarter
+        of the whole scan - where EnumWindows plus one lookup per SLC window
+        costs about ten milliseconds. Checked against the old lookup with
+        SLC's main window alone, with a satellite window open, and after
+        closing it again: the same windows every time.
+
         UIA occasionally fails a whole enumeration with a transient COM error
         (EVENT_E_ALL_SUBSCRIBERS_FAILED and friends) even though SLC is
         running normally. Retrying costs milliseconds and almost always
@@ -261,20 +316,39 @@ class SlcUI:
         for attempt in range(attempts):
             try:
                 found = []
-                root = auto.GetRootControl()
-                for win in root.GetChildren():
-                    pid = getattr(win, "ProcessId", 0)
-                    if pid and _process_name(pid).lower() == self.process_name.lower():
-                        found.append(win)
-                if attempt:
-                    log.info("UI scan recovered on attempt %d", attempt + 1)
-                return found
+                for handle in _handles_of_process(self.process_name):
+                    control = auto.ControlFromHandle(handle)
+                    if control is not None:
+                        found.append(control)
+                if found:
+                    if attempt:
+                        log.info("UI scan recovered on attempt %d", attempt + 1)
+                    return found
+                # Nothing. Before reporting that SLC is not there - which
+                # reads downstream as "SLC is offering no buttons" and loses
+                # the command in silence - spend the half second and ask UIA
+                # the old way. It costs nothing on the path that matters,
+                # because that path never gets here.
+                return self._windows_via_uia()
             except Exception as exc:
                 last = exc
                 log.debug("UI scan attempt %d failed: %s", attempt + 1, exc)
                 time.sleep(0.15 * (attempt + 1))
         raise UIAUnavailable(
             "could not read SLC's UI after {n} attempts: {e}".format(n=attempts, e=last))
+
+    def _windows_via_uia(self) -> list:
+        """The old lookup: walk the desktop's children and match on process."""
+        found = []
+        root = auto.GetRootControl()
+        for win in root.GetChildren():
+            pid = getattr(win, "ProcessId", 0)
+            if pid and _process_name(pid).lower() == self.process_name.lower():
+                found.append(win)
+        if found:
+            log.info("Found %d SLC window(s) only via the slower lookup.",
+                     len(found))
+        return found
 
     def list_actions(self, include_disabled: bool = False,
                      include_hidden: bool = False) -> list[Action]:
