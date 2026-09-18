@@ -39,6 +39,13 @@ DEFAULT_TERMS = (
     # phase of flight
     "pushback", "taxi", "takeoff", "climb", "cruise", "descent", "approach",
     "go around", "landing", "turnaround",
+    # The verb, not only the noun. Polish "znizac" has no cognate here, so
+    # the decoder guessed from general usage: "Wkrotce bedziemy znizac" came
+    # back as "we will short-circuit", and on a second attempt as "short, we
+    # will reduce" - nothing a button could be matched to. Measured on the
+    # same clips, seeding these turns those into "shortly, we will descend"
+    # and "we are descending".
+    "descending", "descending soon", "starting our descent", "top of descent",
     # radio
     "roger", "wilco", "understood", "acknowledged", "copy that",
     "standby", "disregard", "say again", "radio check",

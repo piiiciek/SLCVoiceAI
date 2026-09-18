@@ -747,3 +747,57 @@ def test_asking_for_ground_still_reaches_ground(router):
     decision = router.decide("connect me with ground", actions)
     assert decision.action_index is not None
     assert actions[decision.action_index].name == "GROUND CREW >"
+
+
+# -- descent, which Whisper words differently every time ------------------
+
+#: SLC shows exactly one of its descent buttons at a time - captured over a
+#: flight, no two of them were ever on screen together.
+DESCENT_SCREENS = {
+    "DESCENDING SOON": ["DESCENDING SOON", "NORMAL CRUISE", "Check List",
+                        "Aircraft Layout", "P A SYSTEM >", "Seatbelts"],
+    "DESCENDING SHORTLY": ["DESCENDING SHORTLY", "NORMAL CRUISE", "Check List",
+                           "Aircraft Layout", "P A SYSTEM >", "Seatbelts"],
+    "DESCENT STARTING": ["DESCENT STARTING", "NORMAL CRUISE", "Check List",
+                         "Aircraft Layout", "P A SYSTEM >", "Seatbelts"],
+    "WE'VE STARTED OUR DESCENT": ["WE'VE STARTED OUR DESCENT", "NORMAL CRUISE",
+                                  "Check List", "P A SYSTEM >", "Seatbelts"],
+}
+
+#: Whisper's translations of "Wkrótce będziemy zniżać" and "Zaczynamy
+#: zniżanie", before and after the vocabulary was seeded with "descending".
+DESCENT_TRANSCRIPTS = [
+    ("shortly, we will descend", "DESCENDING SOON"),
+    ("we will start descending soon", "DESCENDING SOON"),
+    ("shortly we will descend", "DESCENDING SHORTLY"),
+    ("we are descending", "DESCENT STARTING"),
+    ("start lowering", "DESCENT STARTING"),
+    ("we started to lower", "WE'VE STARTED OUR DESCENT"),
+]
+
+
+@pytest.mark.parametrize("said,expected", DESCENT_TRANSCRIPTS)
+def test_descent_wording_reaches_the_button_on_screen(router, said, expected):
+    actions = [FakeAction(n) for n in DESCENT_SCREENS[expected]]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected
+
+
+def test_a_transcript_that_lost_the_meaning_is_still_refused(router):
+    """No alias can rescue "short, we will reduce" - the word for descending
+    is simply not in it. That is what the vocabulary seeding is for, and the
+    matcher's job here is to decline rather than invent something."""
+    actions = [FakeAction(n) for n in DESCENT_SCREENS["DESCENDING SOON"]]
+    for said in ("shortly we will reduce", "we will short-circuit"):
+        decision = router.decide(said, actions)
+        assert decision.action_index is None, "matched nonsense: " + said
+
+
+def test_soon_and_starting_are_left_ambiguous_if_both_ever_appear(router):
+    """A bare "we are descending" does not say whether the descent has begun
+    or is about to. SLC has never shown both buttons at once, so this has no
+    effect in a flight - but if that changes, refusing is the right answer."""
+    actions = [FakeAction(n) for n in ("DESCENDING SOON", "DESCENT STARTING",
+                                       "Check List")]
+    assert router.decide("we are descending", actions).action_index is None

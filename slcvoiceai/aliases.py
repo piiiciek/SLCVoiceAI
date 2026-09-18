@@ -203,6 +203,29 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "how are the passengers": ("how are the people", "are the passengers ok",
                                "how is the cabin"),
 
+    # --- descent ----------------------------------------------------------
+    # Even once Whisper says "descend" instead of "reduce", the wording it
+    # picks varies from utterance to utterance - "shortly, we will descend",
+    # "we are descending", "we started to lower" all came out of the same
+    # Polish in one flight. SLC's two soon-ish buttons never appear together
+    # on screen, so registering the same phrasings under both costs nothing.
+    "descending soon": ("we will descend soon", "descending shortly",
+                        "shortly we will descend", "we will be descending",
+                        "soon we will descend", "we will start descending",
+                        "starting our descent soon", "going down soon",
+                        "descending in a moment", "we will lower soon"),
+    "descending shortly": ("we will descend soon", "descending soon",
+                           "shortly we will descend", "we will be descending",
+                           "soon we will descend", "we will start descending",
+                           "going down shortly", "descending in a moment"),
+    "descent starting": ("we are descending", "starting our descent",
+                         "beginning our descent", "starting the descent",
+                         "we are starting to descend", "going down now",
+                         "start lowering", "we are going down"),
+    "started our descent": ("we started to lower", "we have started descending",
+                            "we started going down", "we began our descent",
+                            "we are on the way down"),
+
     # --- delays ----------------------------------------------------------
     # SLC has twenty delay-related buttons and several contain each other's
     # words, so the keys here are deliberately long: aliases_for takes only
