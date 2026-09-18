@@ -288,6 +288,21 @@ def label_for(control) -> str:
         return ""
 
 
+def help_text(control) -> str:
+    """The tooltip SLC shows on hover - what the control really does.
+
+    Worth reading because the label above can be a fiction of ours. An
+    icon-only control has no accessible name, so humanise_id() invents one
+    from its id, and an invented name can be wrong about the control rather
+    than merely clumsy: cmdStandBy reads as a perfectly sensible 'Stand By'
+    and its tooltip says "Close SLC or Restart Flight".
+    """
+    try:
+        return (control.HelpText or "").strip()
+    except Exception:
+        return ""
+
+
 class SlcUI:
     """A live view of what Self-Loading Cargo can currently be told to do."""
 
@@ -392,6 +407,18 @@ class SlcUI:
                         continue
                     if is_denied(name):
                         log.debug("Skipping denylisted control %r", name)
+                        continue
+                    # The name is not always the control's own. cmdStandBy
+                    # has no accessible name, humanises to a reasonable
+                    # looking 'Stand By', and its tooltip reads "Close SLC
+                    # or Restart Flight" - it was pressed in flight by
+                    # someone answering a radio check with "5 by 5". So the
+                    # denylist gets to see what SLC says the control does,
+                    # not only what we decided to call it.
+                    hint = help_text(ctl)
+                    if hint and is_denied(hint):
+                        log.debug("Skipping %r - its tooltip says %r",
+                                  name, hint)
                         continue
                     key = (win_name, name.lower())
                     if key in seen:

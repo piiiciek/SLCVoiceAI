@@ -82,11 +82,16 @@ have a real one, collapsed controls are `0x0`. `is_visible()` in
 context sensitivity — 335 controls in the tree, 33 on screen during flight setup,
 22 back at the launcher, tracking live as the UI changes.
 
-Two SLC quirks worth knowing if you extend this:
+Three SLC quirks worth knowing if you extend this:
 
 - **Toolbar buttons are icon-only** and carry no accessible name at all, just an
   `AutomationId` like `cmdToggleDoorMode`. `humanise_id()` turns those back into
   `Toggle Door Mode`.
+- **A name we invented can be a false friend.** `cmdStandBy` humanises to a
+  perfectly sensible-looking `Stand By` — and its tooltip reads *"Close SLC or
+  Restart Flight"*. A pilot answering a radio check with "5 by 5" pressed it.
+  Where the label is our guess rather than SLC's own name, the tooltip is the
+  control's real description, so the denylist is checked against both.
 - **`IsOffscreen` is useless here** — it is `True` for everything, visible or not.
 
 Check it yourself at any time:

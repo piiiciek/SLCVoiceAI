@@ -649,3 +649,38 @@ def test_waving_away_declines_when_disregard_is_absent(router, radio_actions):
         assert decision.action_index is None, (
             "pressed {n!r} for {s!r}".format(
                 n=radio_actions[decision.action_index].name, s=said))
+
+
+#: What the scan now offers where GROUND_BUTTONS had both: the toolbar's
+#: 'Stand By' is gone, refused by slc_ui because its tooltip reads
+#: "Close SLC or Restart Flight". Only the radio button is left.
+GROUND_BUTTONS_TODAY = [n for n in GROUND_BUTTONS if n != "Stand By"]
+
+
+@pytest.fixture(scope="module")
+def ground_today() -> list["FakeAction"]:
+    return [FakeAction(n) for n in GROUND_BUTTONS_TODAY]
+
+
+@pytest.mark.parametrize("said", [
+    "standby", "stand by", "wait", "hold on", "one moment",
+    "just a second", "please wait", "wait a moment",
+])
+def test_telling_someone_to_wait_reaches_the_radio_standby(router, ground_today,
+                                                           said):
+    """SLC used to show two buttons a person would call 'stand by': the
+    radio reply, and a toolbar icon that closes SLC or restarts the flight.
+    They tied, so the router declined and the pilot got nothing."""
+    decision = router.decide(said, ground_today)
+    assert decision.action_index is not None, "declined: " + said
+    assert ground_today[decision.action_index].name == "STANDBY"
+
+
+def test_the_two_stand_bys_used_to_tie(router):
+    """Why the fix belongs in the scan and not in the matcher: as names
+    alone, these two are equally good answers and no threshold can separate
+    them. Only SLC's tooltip says one of them ends the flight."""
+    both = [FakeAction(n) for n in ("Stand By", "STANDBY", "ROGER")]
+    decision = router.decide("hold on", both)
+    assert decision.action_index is None
+    assert "ambiguous" in decision.reasoning.lower()

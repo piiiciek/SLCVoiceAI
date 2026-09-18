@@ -184,3 +184,95 @@ def test_the_flight_windows_are_not_refused():
 def test_an_untitled_window_is_not_refused():
     assert not slc_ui.is_denied_window("")
     assert not slc_ui.is_denied_window(None)
+
+
+# -- controls whose name is our invention, not SLC's ----------------------
+
+class FakeControl2:
+    """A UIA control, as much of one as slc_ui actually touches."""
+
+    def __init__(self, name="", automation_id="", tooltip="", enabled=True):
+        self.Name = name
+        self.AutomationId = automation_id
+        self.HelpText = tooltip
+        self.IsEnabled = enabled
+        self.ControlTypeName = "ButtonControl"
+
+
+def test_a_named_control_keeps_its_own_name():
+    assert slc_ui.label_for(FakeControl2(name="STANDBY")) == "STANDBY"
+
+
+def test_an_icon_only_control_gets_a_name_invented_from_its_id():
+    assert slc_ui.label_for(
+        FakeControl2(automation_id="cmdToggleDoorMode")) == "Toggle Door Mode"
+
+
+def test_the_tooltip_is_read():
+    assert slc_ui.help_text(
+        FakeControl2(tooltip=" Toggle Seatbelts ")) == "Toggle Seatbelts"
+
+
+def test_a_control_that_cannot_be_read_yields_nothing():
+    class Stale:
+        @property
+        def Name(self):
+            raise OSError("element is stale")
+
+        @property
+        def HelpText(self):
+            raise OSError("element is stale")
+
+        @property
+        def AutomationId(self):
+            raise OSError("element is stale")
+
+    assert slc_ui.label_for(Stale()) == ""
+    assert slc_ui.help_text(Stale()) == ""
+
+
+def test_the_button_that_closes_slc_is_refused_by_its_tooltip():
+    """cmdStandBy has no accessible name, so humanise_id calls it 'Stand By'
+    - which nothing in DENYLIST catches, and which the pilot's "5 by 5"
+    pressed in flight. SLC's own tooltip says what it really is."""
+    control = FakeControl2(automation_id="cmdStandBy",
+                           tooltip="Close SLC or Restart Flight")
+    assert slc_ui.label_for(control) == "Stand By"
+    assert not slc_ui.is_denied(slc_ui.label_for(control)), (
+        "if the name alone were enough, the tooltip check would be pointless")
+    assert slc_ui.is_denied(slc_ui.help_text(control))
+
+
+def test_the_radio_standby_is_not_caught_with_it():
+    """The comms button really is called STANDBY and really does mean
+    'wait' - it has to survive, or answering a ground crew call stops
+    working. It carries no tooltip at all."""
+    control = FakeControl2(name="STANDBY", automation_id="cmdPlayCaptainStandby")
+    assert not slc_ui.is_denied(slc_ui.label_for(control))
+    assert not slc_ui.is_denied(slc_ui.help_text(control))
+
+
+def test_the_toolbar_buttons_that_matter_survive_their_tooltips():
+    """Every icon on SLC's toolbar has a tooltip; only one of them is a way
+    out of the flight. Captured from SLC v1.6.7.3."""
+    harmless = [
+        ("cmdNotifications", "Show Current Flight Information"),
+        ("cmdSeatbelts", "Toggle Seatbelts"),
+        ("cmdInflightServices", "Toggle Cabin Management Window"),
+        ("cmdAircraftLayout", "Open Aircraft Layout"),
+        ("cmdAvailablePhrasesWindow", "Open Speech Assistance Window"),
+        ("cmdNarrationWindow", "Open Narration Window"),
+        ("cmdCheckList", "Open Scoring Checklist"),
+        ("cmdToggleDoors", "Toggle Aircraft Doors"),
+        ("cmdTannoy", "Address The Cabin"),
+        ("cmdToggleDoorMode", "Toggle Gate Mode to 'Stairs' (Currently Jetway)"),
+    ]
+    for ident, tooltip in harmless:
+        control = FakeControl2(automation_id=ident, tooltip=tooltip)
+        assert not slc_ui.is_denied(slc_ui.help_text(control)), ident
+        assert not slc_ui.is_denied(slc_ui.label_for(control)), ident
+
+
+def test_an_empty_tooltip_denies_nothing():
+    """is_denied('') must not match, or every comms button would vanish."""
+    assert not slc_ui.is_denied("")
