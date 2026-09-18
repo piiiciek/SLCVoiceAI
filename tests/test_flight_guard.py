@@ -203,3 +203,54 @@ def test_the_pilot_is_told_how_to_get_them_back(caplog):
     with caplog.at_level("INFO"):
         bridge()._without_flight_enders(actions, {})
     assert "stream_export_dir" in caplog.text
+
+
+# -- what the log has to say for itself -----------------------------------
+
+def logging_bridge():
+    b = bridge()
+    b._last_flight_state = None
+    return b
+
+
+def test_the_exported_state_is_logged_once(caplog):
+    """So a flight with the export switched on actually answers whether the
+    field names are the right ones, instead of leaving it to be guessed."""
+    b = logging_bridge()
+    with caplog.at_level("INFO"):
+        b._log_flight_state({"SLC_flightStatus": "Boarding",
+                             "SLC_flightNumber": "LO282"})
+    assert "SLC_flightStatus='Boarding'" in caplog.text
+    assert "flight underway: True" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        b._log_flight_state({"SLC_flightStatus": "Boarding",
+                             "SLC_flightNumber": "LO282"})
+    assert caplog.text == "", "the same state was logged twice"
+
+
+def test_a_change_of_state_is_logged_again(caplog):
+    b = logging_bridge()
+    b._log_flight_state({"SLC_flightStatus": "Boarding"})
+    with caplog.at_level("INFO"):
+        b._log_flight_state({"SLC_flightStatus": "Cruise"})
+    assert "Cruise" in caplog.text
+
+
+def test_noisy_fields_do_not_retrigger_it(caplog):
+    """The export also carries altitude and vertical speed, which change on
+    every utterance. Only the fields the guard reads count as a change."""
+    b = logging_bridge()
+    b._log_flight_state({"SLC_flightStatus": "Cruise", "SLC_altitude": "31000"})
+    with caplog.at_level("INFO"):
+        b._log_flight_state({"SLC_flightStatus": "Cruise",
+                             "SLC_altitude": "31500"})
+    assert caplog.text == ""
+
+
+def test_no_export_says_so_plainly(caplog):
+    b = logging_bridge()
+    with caplog.at_level("INFO"):
+        b._log_flight_state({})
+    assert "stream_export_dir" in caplog.text

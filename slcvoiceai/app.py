@@ -8,7 +8,8 @@ import threading
 import time
 
 from .config import Config
-from .context import flight_is_underway, format_context, read_flight_context
+from .context import (FLIGHT_FIELDS, flight_is_underway, format_context,
+                      read_flight_context)
 from .intent import build_router
 from .slc_ui import SlcUI, UIAUnavailable, starts_a_new_flight
 
@@ -86,6 +87,7 @@ class Bridge:
         self.router = build_router(cfg)
         self._pending: _Scan | None = None
         self._pending_lock = threading.Lock()
+        self._last_flight_state: dict | None = None
         # Imported lazily: loading Whisper takes a while and pulls in CUDA.
         from .stt import Transcriber
         self.stt = Transcriber(cfg.stt)
@@ -148,6 +150,27 @@ class Bridge:
             log.error("Heard %r but %s - command dropped, please say it "
                       "again.", text, exc)
             return None
+
+    def _log_flight_state(self, flight: dict) -> None:
+        """Say what SLC reported, the first time and whenever it changes.
+
+        Only the fields the guard actually reads. The export also carries
+        altitude and vertical speed, which change on every single utterance
+        and would bury the log in noise.
+        """
+        seen = {field: (flight.get(field) or "").strip()
+                for field in FLIGHT_FIELDS}
+        if seen == self._last_flight_state:
+            return
+        self._last_flight_state = seen
+        if not flight:
+            log.info("SLC flight state: nothing exported "
+                     "([slc] stream_export_dir is not set).")
+            return
+        reported = ", ".join("{k}={v!r}".format(k=k, v=v)
+                             for k, v in seen.items()) or "(none of them)"
+        log.info("SLC flight state: %s -> flight underway: %s",
+                 reported, flight_is_underway(flight))
 
     def _without_flight_enders(self, actions: list, flight: dict) -> list:
         """Hide the start-a-new-flight buttons unless there is no flight.
@@ -222,6 +245,7 @@ class Bridge:
             return
 
         flight = read_flight_context(self.cfg.slc.stream_export_dir)
+        self._log_flight_state(flight)
         actions = self._without_flight_enders(actions, flight)
 
         # The whole list, not a sample. When a command does not land, the
