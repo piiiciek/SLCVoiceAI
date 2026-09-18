@@ -42,7 +42,11 @@ ALIASES: dict[str, tuple[str, ...]] = {
                  "im listening", "listening", "go on", "yes go ahead",
                  "please speak", "speak", "speak to me", "talk to me",
                  "yes im listening", "i am listening", "go ahead please",
-                 "what is it", "what do you need", "you can speak"),
+                 "what is it", "what do you need", "you can speak",
+                 # "prosze mowic" came back as "you can say" four times in
+                 # one flight, with GO AHEAD on screen and refused each time.
+                 "say", "you can say", "say it", "you may speak",
+                 "we are listening", "i hear you go ahead"),
     "standby": ("stand by", "wait", "hold on", "one moment", "just a second",
                 "give me a moment", "wait a moment"),
     "repeat transmission": ("say again", "repeat", "repeat that",

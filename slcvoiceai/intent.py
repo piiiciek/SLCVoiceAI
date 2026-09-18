@@ -87,6 +87,8 @@ _NOISE = {
 _UTTERANCE_FILLER = {"very", "much", "really", "quite", "please"}
 
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
+#: Straight and curly, because Whisper uses both.
+_APOSTROPHE = re.compile(r"[’']")
 
 #: Fraction of an alias's own words that must appear in the utterance before
 #: that alias is allowed to stand in for its button. Guards against short
@@ -181,7 +183,14 @@ def normalise(text: str, spoken: bool = True) -> str:
     `spoken` distinguishes what the pilot said from what a button is called.
     Intensifiers are noise in the first and meaning in the second.
     """
-    text = _PUNCT.sub(" ", text.lower())
+    # Apostrophes are removed, not turned into a space, so a contraction
+    # stays one word. Splitting on them made "I'm" into "i" and "m", the
+    # first dropped as noise and the second matching nothing - while the
+    # alias table is written the other way round ("im listening", "thats
+    # fine", "didnt catch that"), so no alias holding a contraction could
+    # fire at all. Whisper writes them both ways from one utterance to the
+    # next, and this is what makes the two spellings the same word.
+    text = _PUNCT.sub(" ", _APOSTROPHE.sub("", text.lower()))
     drop = _NOISE | _UTTERANCE_FILLER if spoken else _NOISE
     words = [w for w in text.split() if w and w not in drop]
     return " ".join(words)

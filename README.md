@@ -372,6 +372,7 @@ tools/
   probe_slc.py    standalone UIA diagnostic
   probe_cache.py  ways of reading the UIA tree, measured against each other
   close_slc.py    close SLC, answering its "are you sure?" dialog
+  replay_log.py   replay a flight log against today's matcher
 tests/
   test_intent.py    routing regressions, runs without SLC
   test_hardware.py  model selection across VRAM levels
