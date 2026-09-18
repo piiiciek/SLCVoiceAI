@@ -47,10 +47,14 @@ def resolve_device(name: str):
 class PushToTalk:
     """Records mono float32 audio for as long as the PTT key is held down."""
 
-    def __init__(self, cfg: AudioConfig):
+    def __init__(self, cfg: AudioConfig, on_talk_start=None):
         self.cfg = cfg
         self.key = _parse_key(cfg.ptt_key)
         self.device = resolve_device(cfg.input_device)
+        #: Called once as the key goes down, before a word has been said.
+        #: The bridge uses it to start reading SLC's buttons during the
+        #: utterance rather than after it.
+        self._on_talk_start = on_talk_start
         self._held = threading.Event()
         self._clips: queue.Queue = queue.Queue()
         self._listener: keyboard.Listener | None = None
@@ -100,8 +104,23 @@ class PushToTalk:
 
     # -- internals ---------------------------------------------------------
     def _on_press(self, key) -> None:
-        if key == self.key:
-            self._held.set()
+        if key != self.key:
+            return
+        # A held key auto-repeats, so this fires over and over for a single
+        # press. Setting an Event twice is harmless, but telling the bridge
+        # to start a scan thirty times is not - only the transition counts.
+        if self._held.is_set():
+            return
+        self._held.set()
+        if self._on_talk_start is None:
+            return
+        try:
+            self._on_talk_start()
+        except Exception:
+            # This runs on pynput's listener thread. An exception escaping
+            # here takes push-to-talk down for the rest of the session, and
+            # the hook is only an optimisation.
+            log.exception("Talk-start hook failed; carrying on without it.")
 
     def _on_release(self, key) -> None:
         if key == self.key:

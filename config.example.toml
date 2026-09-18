@@ -130,6 +130,22 @@ min_confidence = 0.65
 # it. 0 disables the check.
 max_command_age_seconds = 12.0
 
+# Start reading SLC's buttons the moment the push-to-talk key goes down,
+# instead of waiting until you let go.
+#
+# Reading SLC's window takes around two seconds and was the slowest part of a
+# command. It does not depend on what you are about to say, though, so it can
+# run while you are still saying it - which hides it behind your own speech
+# and takes it out of the wait altogether. Turn this off if you would rather
+# the button list were read strictly after you stop talking.
+prescan = true
+
+# How old that scan may be when it is finally used. It starts with the key, so
+# its age is however long you held the key plus transcription. Past this the
+# bridge reads SLC again rather than press something that was on offer half a
+# minute ago. 0 disables the check.
+max_scan_age_seconds = 30.0
+
 # true = decide and log, but never actually press anything. Start here.
 dry_run = false
 

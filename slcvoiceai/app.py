@@ -45,10 +45,18 @@ class _Scan:
         self._thread: threading.Thread | None = None
         self._actions: list | None = None
         self._error: Exception | None = None
+        self.started_at: float | None = None
 
     def start(self) -> None:
+        self.started_at = time.time()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def age(self) -> float:
+        """How long ago this scan began - how stale its picture of SLC is."""
+        if self.started_at is None:
+            return 0.0
+        return time.time() - self.started_at
 
     def _run(self) -> None:
         try:
@@ -76,19 +84,80 @@ class Bridge:
         self.cfg = cfg
         self.ui = SlcUI(cfg.slc.process_name)
         self.router = build_router(cfg)
+        self._pending: _Scan | None = None
+        self._pending_lock = threading.Lock()
         # Imported lazily: loading Whisper takes a while and pulls in CUDA.
         from .stt import Transcriber
         self.stt = Transcriber(cfg.stt)
+
+    def prescan(self) -> None:
+        """Start reading SLC the moment the pilot presses the key.
+
+        A scan takes about as long as a short sentence, and the button list
+        does not depend on what is about to be said. Running it while the
+        pilot is still speaking takes it off the critical path altogether,
+        which is worth far more than any amount of tuning the scan itself:
+        measured against a live SLC, every faster-looking way of reading the
+        tree either came out the same or could not see most of the buttons.
+        """
+        if not self.cfg.behaviour.prescan:
+            return
+        scan = _Scan(self.ui)
+        scan.start()
+        with self._pending_lock:
+            self._pending = scan
+
+    def _claim_scan(self) -> tuple[_Scan, bool]:
+        """The scan that started with the key, or a fresh one beside it.
+
+        Returns the scan and whether it came from the key press, because a
+        pre-scan that failed deserves a second attempt: it ran seconds ago,
+        under conditions that have since changed.
+        """
+        with self._pending_lock:
+            scan, self._pending = self._pending, None
+
+        if scan is not None:
+            limit = self.cfg.behaviour.max_scan_age_seconds
+            if not limit or scan.age() <= limit:
+                return scan, True
+            log.info("The scan from the key press is %.0fs old; reading SLC "
+                     "again rather than trusting it.", scan.age())
+
+        scan = _Scan(self.ui)
+        scan.start()
+        return scan, False
+
+    def _actions_for(self, scan: _Scan, from_prescan: bool, text: str):
+        """SLC's current buttons, or None if it could not be read."""
+        try:
+            return scan.result()
+        except UIAUnavailable as exc:
+            if not from_prescan:
+                log.error("Heard %r but %s - command dropped, please say it "
+                          "again.", text, exc)
+                return None
+            log.info("The scan started with the key failed (%s); asking SLC "
+                     "again before giving up on what was said.", exc)
+
+        retry = _Scan(self.ui)
+        retry.start()
+        try:
+            return retry.result()
+        except UIAUnavailable as exc:
+            log.error("Heard %r but %s - command dropped, please say it "
+                      "again.", text, exc)
+            return None
 
     def handle(self, audio, captured_at: float | None = None) -> None:
         started = time.time()
 
         # Reading SLC's UI costs about as long as transcribing, and the two do
         # not depend on each other - the button list is the same whatever the
-        # pilot turns out to have said. Run them together and the command
-        # takes as long as the slower one instead of both in turn.
-        scan = _Scan(self.ui)
-        scan.start()
+        # pilot turns out to have said. Usually the scan is already running,
+        # started when the key went down; if it is not, start it here and let
+        # it run beside transcription as it always did.
+        scan, from_prescan = self._claim_scan()
 
         text, language = self.stt.transcribe(audio)
 
@@ -107,11 +176,8 @@ class Bridge:
             log.info("Nothing intelligible in that clip.")
             return
 
-        try:
-            actions = scan.result()
-        except UIAUnavailable as exc:
-            log.error("Heard %r but %s - command dropped, please say it again.",
-                      text, exc)
+        actions = self._actions_for(scan, from_prescan, text)
+        if actions is None:
             return
 
         if not actions:
@@ -149,7 +215,7 @@ class Bridge:
     def run(self) -> int:
         from .audio import PushToTalk
 
-        ptt = PushToTalk(self.cfg.audio)
+        ptt = PushToTalk(self.cfg.audio, on_talk_start=self.prescan)
         ptt.start()
 
         mode = " [DRY RUN - nothing will be pressed]" if self.cfg.behaviour.dry_run else ""

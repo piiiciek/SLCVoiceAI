@@ -98,6 +98,14 @@ class BehaviourConfig:
     #: Refuse to act on a command that took longer than this to transcribe.
     #: 0 disables the check.
     max_command_age_seconds: float = 12.0
+    #: Read SLC's buttons the moment the push-to-talk key goes down, so the
+    #: scan runs while the pilot is still speaking rather than afterwards.
+    prescan: bool = True
+    #: How old that scan may be by the time it is used. It starts with the
+    #: key, so its age is however long the key was held plus transcription -
+    #: comfortably inside this unless someone holds the key through a very
+    #: long sentence, in which case SLC is simply read again. 0 disables it.
+    max_scan_age_seconds: float = 30.0
 
     log_file: str = "slcvoiceai.log"
 

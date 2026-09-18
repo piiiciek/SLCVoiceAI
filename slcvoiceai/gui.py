@@ -294,7 +294,7 @@ class App:
             from .audio import PushToTalk
 
             bridge = Bridge(self.cfg)
-            ptt = PushToTalk(self.cfg.audio)
+            ptt = PushToTalk(self.cfg.audio, on_talk_start=bridge.prescan)
             ptt.start()
             self.bridge, self.ptt = bridge, ptt
             self.root.after(0, self._started)
