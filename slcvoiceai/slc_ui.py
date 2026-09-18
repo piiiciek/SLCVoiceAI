@@ -69,6 +69,36 @@ WINDOW_DENYLIST = (
 )
 
 
+#: AutomationId prefixes for controls that begin a flight, and so end
+#: whatever flight is already running. SLC has six, and they cannot be
+#: recognised by their labels: cmdStartNewPassengerLineFlight is displayed
+#: as 'LINE PILOT MODE', which says nothing about starting anything. The id
+#: is the honest signal, and it does not change with the display language.
+FLIGHT_STARTER_IDS = ("cmdstartnew", "cmdrestoreprevious")
+
+#: Fallbacks, for an SLC that renames its controls. Matched against the
+#: label and against the tooltip, both lowercased.
+_FLIGHT_STARTER_TEXT = ("start new", "restore previous flight")
+
+
+def starts_a_new_flight(name: str, automation_id: str = "",
+                        tooltip: str = "") -> bool:
+    """Would pressing this control throw away the flight in progress?
+
+    Unlike everything in DENYLIST these are perfectly reasonable at SLC's
+    launcher, which is why they are not simply refused - but SLC keeps them
+    on the toolbar during the flight too, a few icons along from the
+    seatbelt sign.
+    """
+    if (automation_id or "").strip().lower().startswith(FLIGHT_STARTER_IDS):
+        return True
+    for text in (name, tooltip):
+        low = (text or "").strip().lower()
+        if any(hint in low for hint in _FLIGHT_STARTER_TEXT) and "flight" in low:
+            return True
+    return False
+
+
 class UIAUnavailable(RuntimeError):
     """The UI Automation tree could not be read this time.
 
@@ -93,6 +123,9 @@ class Action:
     control_type: str
     automation_id: str
     enabled: bool
+    #: SLC's own description of the control, where it has one. Worth keeping
+    #: because the name above is sometimes ours rather than SLC's.
+    tooltip: str = ""
     _control: object = None
 
     def __str__(self) -> str:
@@ -430,6 +463,7 @@ class SlcUI:
                         control_type=ctl.ControlTypeName.replace("Control", ""),
                         automation_id=(ctl.AutomationId or "").strip(),
                         enabled=enabled,
+                        tooltip=hint,
                         _control=ctl,
                     ))
                 except Exception:

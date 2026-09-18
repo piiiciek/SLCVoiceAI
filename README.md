@@ -333,10 +333,12 @@ file.
 
 ## Safety
 
-Two deliberate guardrails, because a misfire mid-approach is worse than being asked to repeat yourself:
+Deliberate guardrails, because a misfire mid-approach is worse than being asked to repeat yourself:
 
 - **Visibility filter.** The model is only ever shown controls SLC is currently displaying, so it cannot reach a command that is out of context for the phase of flight.
 - **Denylist.** Session-ending and flight-destroying controls — `EXIT SELF-LOADING CARGO`, `CLOSE SELF-LOADING CARGO`, `CANCEL SINGLE FLIGHT`, `DISPATCH NEXT FLIGHT`, `DO NOT RESTORE PREVIOUS FLIGHT` and friends — are stripped before the model ever sees them. It cannot press what it cannot see. The list lives in `slcvoiceai/slc_ui.py`.
+- **The denylist is checked against the tooltip too**, not only against the name, because some of those names are ours rather than SLC's. `cmdStandBy` has no accessible name at all and humanises to a harmless-looking `Stand By`; its tooltip reads *"Close SLC or Restart Flight"*.
+- **Start-a-new-flight buttons are gated on flight state.** SLC leaves them on the toolbar for the whole flight, and pressing one ends it. They cannot be denylisted outright — at the launcher they are the ordinary way to begin — so they are offered only when SLC's stream export says there is no flight in progress. With the export off the bridge cannot tell, and keeps them hidden: you can always start a flight with the mouse, and you cannot un-end one.
 - **Confidence floor.** Below `min_confidence` (default `0.80`) the bridge does nothing and logs why. On the fuzzy backend this is the guardrail that matters most: string matching always finds a *nearest* neighbour, so without a high floor, radio chatter lands on a cabin command — *"tower london zero two"* scored 0.60 against `PHONE >`. The default was picked by sweeping thresholds against real SLC buttons; 0.75–0.85 separates commands from chatter cleanly. `tests/test_intent.py` locks that in.
 - **Ambiguity check.** If the two best candidates score within 0.05 of each other, the bridge declines rather than picking one.
 
@@ -376,6 +378,7 @@ tests/
   test_scan.py      the scan behaves as if it had not run in the background
   test_prescan.py   one key press, one scan, reused once
   test_windows.py   finding SLC's windows, and the windows to ignore
+  test_flight_guard.py the six buttons that would end the flight
   test_config_keys.py  API keys: resolved, masked, never committed
 ```
 

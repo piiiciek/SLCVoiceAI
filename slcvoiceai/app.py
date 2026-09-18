@@ -8,9 +8,9 @@ import threading
 import time
 
 from .config import Config
-from .context import format_context, read_flight_context
+from .context import flight_is_underway, format_context, read_flight_context
 from .intent import build_router
-from .slc_ui import SlcUI, UIAUnavailable
+from .slc_ui import SlcUI, UIAUnavailable, starts_a_new_flight
 
 log = logging.getLogger(__name__)
 
@@ -149,6 +149,42 @@ class Bridge:
                       "again.", text, exc)
             return None
 
+    def _without_flight_enders(self, actions: list, flight: dict) -> list:
+        """Hide the start-a-new-flight buttons unless there is no flight.
+
+        SLC leaves them on the toolbar for the whole flight, next to the
+        seatbelt sign, and pressing one throws the flight away. They are not
+        denylisted outright because at the launcher they are the ordinary
+        way to begin - so the question is whether a flight is in progress,
+        and only SLC can answer it.
+
+        When SLC is not answering, the buttons stay hidden. A pilot who
+        wanted one can click it; a pilot who loses a flight to a misheard
+        sentence cannot get it back.
+        """
+        def risky_one(action) -> bool:
+            return starts_a_new_flight(action.name,
+                                       getattr(action, "automation_id", ""),
+                                       getattr(action, "tooltip", ""))
+
+        risky = [a for a in actions if risky_one(a)]
+        if not risky:
+            return actions
+
+        underway = flight_is_underway(flight)
+        if underway is False:
+            return actions
+
+        names = ", ".join(repr(a.name) for a in risky)
+        if underway is None:
+            log.info("Not offering %s: SLC's stream export is off, so there "
+                     "is no way to tell whether a flight is in progress. Set "
+                     "[slc] stream_export_dir to have them back at the "
+                     "launcher.", names)
+        else:
+            log.info("Not offering %s: a flight is in progress.", names)
+        return [a for a in actions if not risky_one(a)]
+
     def handle(self, audio, captured_at: float | None = None) -> None:
         started = time.time()
 
@@ -184,14 +220,17 @@ class Bridge:
             log.warning("Heard %r but SLC is offering no buttons right now "
                         "(is it running, and in a flight?).", text)
             return
+
+        flight = read_flight_context(self.cfg.slc.stream_export_dir)
+        actions = self._without_flight_enders(actions, flight)
+
         # The whole list, not a sample. When a command does not land, the
         # first question is always whether the button was even on offer -
         # and a truncated list cannot answer it.
         log.info("SLC is offering %d action(s): %s",
                  len(actions), ", ".join(a.name for a in actions))
 
-        context = format_context(read_flight_context(self.cfg.slc.stream_export_dir))
-        decision = self.router.decide(text, actions, context)
+        decision = self.router.decide(text, actions, format_context(flight))
 
         if decision.action_index is None:
             log.info("Declined: %s", decision.reasoning)

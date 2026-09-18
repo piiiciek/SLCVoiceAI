@@ -41,3 +41,24 @@ def format_context(context: dict[str, str]) -> str:
     if not context:
         return "(no flight data exported)"
     return "\n".join("{k}: {v}".format(k=k, v=v) for k, v in context.items())
+
+
+#: Fields that only carry a value once there is a flight to talk about. The
+#: names are SLC's own - the placeholders in its
+#: Export/StreamOverlayTemplate.html.
+FLIGHT_FIELDS = ("SLC_flightStatus", "SLC_flightNumber",
+                 "SLC_departureAirportICAO", "SLC_arrivalAirportICAO")
+
+
+def flight_is_underway(context: dict[str, str]) -> bool | None:
+    """Is there a flight in progress to lose?
+
+    Three answers, and the third is the one that matters: None means SLC is
+    not telling us - the stream export is switched off, or writes nothing we
+    recognise. Anything guarding a destructive control has to read None as
+    "assume there is", because the two ways of being wrong do not cost the
+    same.
+    """
+    if not context:
+        return None
+    return any((context.get(field) or "").strip() for field in FLIGHT_FIELDS)

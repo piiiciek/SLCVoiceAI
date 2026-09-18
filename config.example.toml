@@ -103,10 +103,21 @@ timeout_seconds = 20.0
 [slc]
 process_name = "SLC.exe"
 
-# Optional. In SLC: Settings -> Export Stream Data, point it at a folder, tick
-# the fields you care about (flight phase especially), then put that folder
-# here. Gives the "claude" backend context about where in the flight you are;
-# the "fuzzy" backend ignores it.
+# Optional, but it does more than it used to. In SLC: Settings -> Export Stream
+# Data, point it at a folder, tick the fields you care about, then put that
+# folder here.
+#
+# Two things use it. It gives the "claude" backend context about where in the
+# flight you are, which the "fuzzy" backend ignores. And it is the only way the
+# bridge can tell whether a flight is in progress at all - which decides whether
+# 'Start New Passenger Flight' is offered.
+#
+# SLC leaves those start-a-flight buttons on the toolbar for the whole flight,
+# a few icons along from the seatbelt sign, and pressing one ends the flight.
+# With this unset the bridge cannot tell a flight from the launcher, so it keeps
+# them hidden either way: you can always start a flight with the mouse, but you
+# cannot un-end one. Tick at least flightStatus, flightNumber or the airport
+# codes and they come back at the launcher.
 stream_export_dir = ""
 
 [behaviour]
