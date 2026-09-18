@@ -8,10 +8,12 @@ The point of this window is to answer, without reading a log file:
 * is the bridge actually listening, and on which device
 * what did it hear, what did it match, and did it press anything
 * why did it refuse - the runner-up score usually explains it
-* what is SLC offering right now
 
 It also takes typed input, so the whole matching chain can be exercised
-without a microphone and without being in a flight.
+without a microphone and without being in a flight. That reads SLC when
+you ask it to and not before: a live list of SLC's buttons, refreshed on a
+timer, meant the panel scanned SLC continuously for as long as it was open
+and competed with the scans that carry a command.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .config import Config
-from .slc_ui import SlcUI, UIAUnavailable
+from .slc_ui import SlcUI
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +62,6 @@ class App:
         self.bridge = None
         self.ptt = None
         self.records: queue.Queue = queue.Queue()
-        self._actions = []
 
         self.root = tk.Tk()
         self.root.title("SLCVoiceAI")
@@ -70,7 +71,7 @@ class App:
         self._build()
         self._attach_logging()
         self.root.after(120, self._drain)
-        self.root.after(200, self._refresh_actions)
+        self.root.after(400, self._check_for_updates)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # -- layout ------------------------------------------------------------
@@ -99,6 +100,13 @@ class App:
         self.subtitle = tk.Label(self.root, text="", bg=BG, fg=MUTED, font=FONT,
                                  anchor="w", padx=10)
         self.subtitle.pack(fill="x")
+
+        # Stays out of the layout entirely until there is something to say.
+        self.update_banner = tk.Label(
+            self.root, text="", bg="#1d2a1f", fg=OK, font=FONT_UI,
+            anchor="w", padx=10, pady=5, cursor="hand2")
+        self.update_banner.bind(
+            "<Button-1>", lambda _e: self._open_repository())
 
         # -- controls
         ctrl = ttk.Frame(self.root, padding=(10, 6))
@@ -146,13 +154,6 @@ class App:
         self.feed.tag_config("bad", foreground=BAD)
         self.feed.tag_config("accent", foreground=ACCENT)
         self.feed.configure(state="disabled")
-
-        tk.Label(panes, text="SLC IS OFFERING", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(8, 0))
-        self.actions_box = tk.Listbox(panes, height=8, bg="#161c24", fg=FG,
-                                      relief="flat", font=FONT,
-                                      selectbackground=ACCENT, activestyle="none")
-        self.actions_box.pack(fill="both", expand=True)
 
     # -- logging bridge ----------------------------------------------------
     def _attach_logging(self) -> None:
@@ -202,30 +203,68 @@ class App:
         else:
             self._write("{s}  {m}".format(s=stamp, m=msg), "muted")
 
-    # -- actions pane ------------------------------------------------------
-    def _refresh_actions(self) -> None:
-        try:
-            if self.ui.is_running():
-                self._actions = self.ui.list_actions()
-                names = [a.name for a in self._actions]
-            else:
-                self._actions = []
-                names = ["(SLC is not running)"]
-        except UIAUnavailable:
-            # Transient; keep showing the last good list rather than blanking
-            # the panel every time a COM call hiccups.
-            names = list(self.actions_box.get(0, "end")) or ["(UI scan failed, retrying)"]
-        except Exception as exc:
-            self._actions = []
-            names = ["(scan failed: {e})".format(e=exc)]
+    # -- update notice ------------------------------------------------------
+    def _check_for_updates(self) -> None:
+        """Ask GitHub, off the UI thread, and only speak up if behind."""
+        if not self.cfg.behaviour.check_for_updates:
+            return
 
-        current = list(self.actions_box.get(0, "end"))
-        if current != names:
-            self.actions_box.delete(0, "end")
-            for n in names:
-                self.actions_box.insert("end", n)
-        # 2.5s: a scan costs ~1.7s, so anything tighter just burns CPU.
-        self.root.after(2500, self._refresh_actions)
+        def work():
+            from . import update
+
+            newer = update.check()
+            if newer:
+                self.root.after(0, lambda: self._show_update(newer))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_update(self, version: str) -> None:
+        from . import __version__, update
+
+        self.update_banner.configure(
+            text="↑  SLCVoiceAI {new} is available  (you have {old})  -  "
+                 "click to open GitHub".format(new=version, old=__version__))
+        # Under the status line, above everything else, so it is the first
+        # thing read - and it was never packed before now, so a current copy
+        # never gives up a pixel to it.
+        self.update_banner.pack(fill="x", after=self.subtitle)
+        self._write("-- version {new} is on GitHub; this is {old}  ({url})"
+                    .format(new=version, old=__version__,
+                            url=update.RELEASES_URL), "ok")
+
+    def _open_repository(self) -> None:
+        import webbrowser
+
+        from . import update
+        try:
+            webbrowser.open(update.RELEASES_URL)
+        except Exception as exc:  # pragma: no cover - browser is the OS's
+            log.warning("Could not open %s: %s", update.RELEASES_URL, exc)
+
+    # -- reading SLC on demand ----------------------------------------------
+    def _scan_in_background(self, then) -> None:
+        """Read SLC once, off the UI thread, and hand the result to `then`.
+
+        The panel used to keep a live list of SLC's buttons, refreshed every
+        2.5 seconds for as long as it was open. That was affordable when a
+        scan cost 1.7s at the launcher; in a flight a scan costs 3-8s, so the
+        panel was reading SLC essentially without pause and competing with
+        the scans that actually carry a command. Now nothing scans unless
+        someone asks it to.
+        """
+        def work():
+            from .app import _Scan
+
+            scan = _Scan(self.ui)
+            scan.start()
+            try:
+                actions = scan.result()
+                error = None
+            except Exception as exc:
+                actions, error = [], exc
+            self.root.after(0, lambda: then(actions, error))
+
+        threading.Thread(target=work, daemon=True).start()
 
     # -- controls ----------------------------------------------------------
     def _sync_dry(self) -> None:
@@ -250,8 +289,17 @@ class App:
         said = self.entry.get().strip()
         if not said:
             return
-        if not self._actions:
-            self._write("-- no actions to match against (is SLC running?)", "warn")
+        self._write('-- typed: "{s}"  (reading SLC...)'.format(s=said), "accent")
+        self._scan_in_background(lambda actions, error:
+                                 self._show_ranking(said, actions, error))
+
+    def _show_ranking(self, said: str, actions: list, error) -> None:
+        if error is not None:
+            self._write("     could not read SLC: {e}".format(e=error), "warn")
+            return
+        if not actions:
+            self._write("     no actions to match against (is SLC running?)",
+                        "warn")
             return
 
         router = getattr(self.bridge, "router", None)
@@ -259,21 +307,20 @@ class App:
             from .intent import build_router
             router = build_router(self.cfg)
 
-        self._write('-- typed: "{s}"'.format(s=said), "accent")
         if hasattr(router, "rank"):
-            for score, _i, action in router.rank(said, self._actions)[:4]:
+            for score, _i, action in router.rank(said, actions)[:4]:
                 passes = score >= self.cfg.behaviour.min_confidence
                 self._write("     {:.2f}  {:<34} {}".format(
                     score, action.name, "PASS" if passes else "below floor"),
                     "ok" if passes else "muted")
         else:
-            decision = router.decide(said, self._actions)
+            decision = router.decide(said, actions)
             if decision.action_index is None:
                 self._write("     declined: {r}".format(r=decision.reasoning), "warn")
             else:
                 self._write("     {:.2f}  {}".format(
                     decision.confidence,
-                    self._actions[decision.action_index].name), "ok")
+                    actions[decision.action_index].name), "ok")
 
     # -- bridge lifecycle --------------------------------------------------
     def _toggle(self) -> None:

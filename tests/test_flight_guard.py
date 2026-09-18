@@ -35,7 +35,15 @@ class FakeAction:
 
 
 def bridge():
-    return app.Bridge.__new__(app.Bridge)
+    """A Bridge without its constructor, which loads Whisper and CUDA.
+
+    Carries the same "what did I say last time" state the real one sets up,
+    so the log-once rules behave here as they do in a flight.
+    """
+    b = app.Bridge.__new__(app.Bridge)
+    b._last_flight_state = None
+    b._last_withheld = None
+    return b
 
 
 #: Every flight-starting control SLC v1.6.7.3 has, captured from a live
@@ -207,16 +215,10 @@ def test_the_pilot_is_told_how_to_get_them_back(caplog):
 
 # -- what the log has to say for itself -----------------------------------
 
-def logging_bridge():
-    b = bridge()
-    b._last_flight_state = None
-    return b
-
-
 def test_the_exported_state_is_logged_once(caplog):
     """So a flight with the export switched on actually answers whether the
     field names are the right ones, instead of leaving it to be guessed."""
-    b = logging_bridge()
+    b = bridge()
     with caplog.at_level("INFO"):
         b._log_flight_state({"SLC_flightStatus": "Boarding",
                              "SLC_flightNumber": "LO282"})
@@ -231,7 +233,7 @@ def test_the_exported_state_is_logged_once(caplog):
 
 
 def test_a_change_of_state_is_logged_again(caplog):
-    b = logging_bridge()
+    b = bridge()
     b._log_flight_state({"SLC_flightStatus": "Boarding"})
     with caplog.at_level("INFO"):
         b._log_flight_state({"SLC_flightStatus": "Cruise"})
@@ -241,7 +243,7 @@ def test_a_change_of_state_is_logged_again(caplog):
 def test_noisy_fields_do_not_retrigger_it(caplog):
     """The export also carries altitude and vertical speed, which change on
     every utterance. Only the fields the guard reads count as a change."""
-    b = logging_bridge()
+    b = bridge()
     b._log_flight_state({"SLC_flightStatus": "Cruise", "SLC_altitude": "31000"})
     with caplog.at_level("INFO"):
         b._log_flight_state({"SLC_flightStatus": "Cruise",
@@ -250,7 +252,44 @@ def test_noisy_fields_do_not_retrigger_it(caplog):
 
 
 def test_no_export_says_so_plainly(caplog):
-    b = logging_bridge()
+    b = bridge()
     with caplog.at_level("INFO"):
         b._log_flight_state({})
     assert "stream_export_dir" in caplog.text
+
+
+def test_the_withholding_is_announced_once_not_every_command(caplog):
+    """Said on every utterance this buried the log in a sentence that never
+    changes - and reading the log is how every problem in this project has
+    been found."""
+    b = bridge()
+    b._last_withheld = None
+    actions = list(TOOLBAR)
+    with caplog.at_level("INFO"):
+        b._without_flight_enders(actions, {})
+    assert "Not offering" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        for _ in range(5):
+            b._without_flight_enders(actions, {})
+    assert caplog.text == "", "repeated itself for every command"
+
+
+def test_it_speaks_up_again_when_the_answer_changes(caplog):
+    b = bridge()
+    b._last_withheld = None
+    actions = list(TOOLBAR)
+    b._without_flight_enders(actions, {})
+    with caplog.at_level("INFO"):
+        b._without_flight_enders(actions, {"SLC_flightNumber": "LO282"})
+    assert "a flight is in progress" in caplog.text
+
+
+def test_it_speaks_up_again_when_a_different_button_appears(caplog):
+    b = bridge()
+    b._last_withheld = None
+    b._without_flight_enders(list(TOOLBAR), {})
+    with caplog.at_level("INFO"):
+        b._without_flight_enders(TOOLBAR + [FakeAction(*STARTERS[4])], {})
+    assert "Start New Cargo Flight" in caplog.text

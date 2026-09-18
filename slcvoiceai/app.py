@@ -88,6 +88,7 @@ class Bridge:
         self._pending: _Scan | None = None
         self._pending_lock = threading.Lock()
         self._last_flight_state: dict | None = None
+        self._last_withheld: tuple | None = None
         # Imported lazily: loading Whisper takes a while and pulls in CUDA.
         from .stt import Transcriber
         self.stt = Transcriber(cfg.stt)
@@ -198,14 +199,21 @@ class Bridge:
         if underway is False:
             return actions
 
-        names = ", ".join(repr(a.name) for a in risky)
-        if underway is None:
-            log.info("Not offering %s: SLC's stream export is off, so there "
-                     "is no way to tell whether a flight is in progress. Set "
-                     "[slc] stream_export_dir to have them back at the "
-                     "launcher.", names)
-        else:
-            log.info("Not offering %s: a flight is in progress.", names)
+        # Once, and again when the answer changes. Said on every utterance it
+        # buried the log in a sentence that never varies - and a log nobody
+        # reads is the one thing this project cannot afford, because reading
+        # it is how every one of these problems was found.
+        withheld = tuple(sorted(a.name for a in risky)), underway
+        if withheld != self._last_withheld:
+            self._last_withheld = withheld
+            names = ", ".join(repr(a.name) for a in risky)
+            if underway is None:
+                log.info("Not offering %s: SLC's stream export is off, so "
+                         "there is no way to tell whether a flight is in "
+                         "progress. Set [slc] stream_export_dir to have them "
+                         "back at the launcher.", names)
+            else:
+                log.info("Not offering %s: a flight is in progress.", names)
         return [a for a in actions if not risky_one(a)]
 
     def handle(self, audio, captured_at: float | None = None) -> None:
@@ -280,6 +288,12 @@ class Bridge:
 
         ptt = PushToTalk(self.cfg.audio, on_talk_start=self.prescan)
         ptt.start()
+
+        if self.cfg.behaviour.check_for_updates:
+            # On a worker, because a slow network must not delay the point at
+            # which the key starts working.
+            from .update import check
+            threading.Thread(target=check, daemon=True).start()
 
         mode = " [DRY RUN - nothing will be pressed]" if self.cfg.behaviour.dry_run else ""
         log.info("Ready.%s Hold %s and speak. Ctrl+C to quit.",

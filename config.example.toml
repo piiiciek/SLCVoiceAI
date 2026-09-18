@@ -157,6 +157,16 @@ prescan = true
 # minute ago. 0 disables the check.
 max_scan_age_seconds = 30.0
 
+# Ask GitHub once at startup whether a newer version has been pushed, and say
+# so in the panel and the log. Nothing downloads or replaces itself either way
+# - updating stays something you do on purpose.
+#
+# The check reads one file over HTTPS and sends nothing about your machine. It
+# reads the version straight off the default branch, so a version counts as
+# available the moment it is pushed. Set false if you would rather it never
+# touched the network.
+check_for_updates = true
+
 # true = decide and log, but never actually press anything. Start here.
 dry_run = false
 

@@ -367,6 +367,7 @@ slcvoiceai/
   gemini.py     Gemini fallback matcher
   gui.py        tkinter control panel (--gui)
   aliases.py    synonym table for aviation phraseology
+  update.py     notice when GitHub has a newer version
 tools/
   probe_slc.py    standalone UIA diagnostic
   probe_cache.py  ways of reading the UIA tree, measured against each other
@@ -379,6 +380,7 @@ tests/
   test_prescan.py   one key press, one scan, reused once
   test_windows.py   finding SLC's windows, and the windows to ignore
   test_flight_guard.py the six buttons that would end the flight
+  test_update.py    version comparison, and failing quietly offline
   test_config_keys.py  API keys: resolved, masked, never committed
 ```
 

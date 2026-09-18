@@ -106,6 +106,9 @@ class BehaviourConfig:
     #: comfortably inside this unless someone holds the key through a very
     #: long sentence, in which case SLC is simply read again. 0 disables it.
     max_scan_age_seconds: float = 30.0
+    #: Ask GitHub once at startup whether a newer version has been pushed,
+    #: and say so. Nothing downloads or replaces itself either way.
+    check_for_updates: bool = True
 
     log_file: str = "slcvoiceai.log"
 
