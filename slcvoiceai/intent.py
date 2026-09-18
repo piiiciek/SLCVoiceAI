@@ -254,17 +254,47 @@ class FuzzyRouter:
             best *= POLARITY_PENALTY
         return best
 
-    @staticmethod
-    def _reach(candidate: str, said_tokens: set[str]) -> float:
-        """How much of what was said can this candidate account for?
+    #: How close two words must be to count as the same one when measuring
+    #: reach. "delays" and "delay" are the same word for this purpose;
+    #: "ground" and "stewardess" are not.
+    _SAME_WORD = 85
+
+    def _covers(self, candidate_tokens: set[str], word: str) -> bool:
+        """Does the candidate account for this word the pilot said?
+
+        Exact first, then a similarity pass: the score itself is fuzzy, so
+        the reach that damps it has to be too. Counting exact matches only
+        made "no delays expected" stop covering "delay" over a plural, which
+        quietly broke a tie the router depends on.
+        """
+        if word in candidate_tokens:
+            return True
+        return any(self._fuzz.ratio(word, token) >= self._SAME_WORD
+                   for token in candidate_tokens)
+
+    def _reach(self, candidate: str, said_tokens: set[str]) -> float:
+        """How much of what was said does this candidate actually account for?
 
         token_set_ratio scores a subset as a perfect match, so a short
         candidate claims any longer sentence containing its words. Discourse
         markers are excluded from the denominator: "ok" in front of a command
         is not content the alias should have to cover.
+
+        Counted by the words the candidate shares with the utterance, not by
+        how long the candidate happens to be. Length flatters an alias made
+        mostly of connective words: "connect me with ground" is three words
+        for a full score, and it took "connect me with the stewardess" at
+        0.77 on "connect" and "with" alone - pressing the ground crew while
+        the pilot asked for the cabin. Its one distinguishing word was never
+        said, and now that is what it is measured on.
         """
         content = said_tokens - _DISCOURSE
-        return min(1.0, len(candidate.split()) / max(len(content), 1))
+        # When the whole utterance is markers there is no content to cover,
+        # and a bare "ok" still means ROGER. Fall back to what was said.
+        denominator = content or said_tokens
+        tokens = set(candidate.split())
+        covered = sum(1 for word in said_tokens if self._covers(tokens, word))
+        return min(1.0, covered / max(len(denominator), 1))
 
     @staticmethod
     def _name_reach(raw_name: str, said_tokens: set[str]) -> float:
@@ -274,18 +304,24 @@ class FuzzyRouter:
         "PHONE >", and the same held for BACK, YES, NO and SETTINGS: one
         incidental word was enough to claim a whole sentence.
 
-        Measured against the button's *raw* name, not the filtered one.
-        "THANK YOU" is two words that normalise down to one because "you" is
-        filler, and damping it as a one-word button halved "OK, thanks." to
-        0.50 - so it tied with "Stand By" and was refused, while a bare
-        "Thank you." sailed through at 1.00.
+        Measured on what the name reduces to, not on how it is written.
+        "THANK YOU" is two words that come down to the single token "thank",
+        and exempting it as a two-word name let a courtesy opener claim
+        everything behind it: "ok, thank you, you can sit down, we will land
+        in a moment" scored 1.00 for THANK YOU - certain enough that nothing
+        escalated to the model that would have read it properly.
 
-        Applied only to genuinely one-word names, deliberately. Damping every
-        name by length punishes the ordinary case, where a short button
+        That exemption was added because damping THANK YOU halved "OK,
+        thanks." and tied it with "Stand By". It is not needed for that any
+        more: discourse markers now come out of the denominator, so "ok" in
+        front costs nothing and a bare thanks still scores 1.00.
+
+        Applied only to names of one token, deliberately. Damping every name
+        by length punishes the ordinary case, where a short button
         legitimately answers a longer sentence - "Let's start with the ground
         operation" is five words for the two of "GROUND CREW >".
         """
-        if len([w for w in re.split(r"[^A-Za-z0-9]+", raw_name) if w]) > 1:
+        if len(normalise(raw_name, spoken=False).split()) > 1:
             return 1.0
         content = said_tokens - _DISCOURSE
         return min(1.0, 1.0 / max(len(content), 1))

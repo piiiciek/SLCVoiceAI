@@ -684,3 +684,66 @@ def test_the_two_stand_bys_used_to_tie(router):
     decision = router.decide("hold on", both)
     assert decision.action_index is None
     assert "ambiguous" in decision.reasoning.lower()
+
+
+# -- a courtesy opener must not claim the sentence behind it --------------
+
+#: What SLC offered at 23:17:53 on 2026-09-18, trimmed to what matters.
+LANDING_BUTTONS = [
+    "THANK YOU", "BE SEATED FOR LANDING NOW", "PREPARE CABIN FOR LANDING",
+    "Seatbelts", "ROGER", "Check List", "Tannoy", "INTERCOM >",
+    "GROUND CREW >", "Interactions Crew", "Interactions Ground Crew",
+]
+
+
+@pytest.fixture(scope="module")
+def landing_actions() -> list["FakeAction"]:
+    return [FakeAction(n) for n in LANDING_BUTTONS]
+
+
+def test_thanks_in_front_does_not_swallow_the_command(router, landing_actions):
+    """Whisper heard this perfectly; the matcher threw it away. 'THANK YOU'
+    normalises to the single token 'thank', token_set_ratio scores a subset
+    as perfect, and the button was exempt from reach damping - so a courtesy
+    opener claimed a thirteen-word sentence at 1.00 and, being certain, never
+    escalated to the model that would have understood it."""
+    said = "ok, thank you, you can sit down, we will land in a moment"
+    decision = router.decide(said, landing_actions)
+    if decision.action_index is not None:
+        assert landing_actions[decision.action_index].name != "THANK YOU", (
+            "the courtesy opener won again")
+
+
+@pytest.mark.parametrize("said", [
+    "Thank you.",
+    "ok, thanks",
+    "OK, thank you very much",
+    "thank you very much",
+])
+def test_actually_thanking_someone_still_works(router, landing_actions, said):
+    """The damping must not cost the case it was exempted for."""
+    decision = router.decide(said, landing_actions)
+    assert decision.action_index is not None, "declined plain thanks: " + said
+    assert landing_actions[decision.action_index].name == "THANK YOU"
+
+
+def test_a_filler_heavy_alias_does_not_win_on_its_filler(router):
+    """'connect me with ground' is registered for GROUND CREW, but two of its
+    three words are connective. It took 'connect me with the stewardess' at
+    0.77 - above the floor, so nothing escalated - and pressed the ground
+    crew while the pilot was asking for the cabin."""
+    actions = [FakeAction(n) for n in
+               ("INTERCOM >", "Interactions Ground Crew", "Interactions Crew",
+                "Seatbelts", "Check List", "Tannoy")]
+    decision = router.decide("connect me with the stewardess", actions)
+    if decision.action_index is not None:
+        assert actions[decision.action_index].name != "Interactions Ground Crew", (
+            "still reaching for the ground crew")
+
+
+def test_asking_for_ground_still_reaches_ground(router):
+    actions = [FakeAction(n) for n in
+               ("INTERCOM >", "GROUND CREW >", "Seatbelts", "Check List")]
+    decision = router.decide("connect me with ground", actions)
+    assert decision.action_index is not None
+    assert actions[decision.action_index].name == "GROUND CREW >"
