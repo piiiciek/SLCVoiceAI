@@ -216,6 +216,26 @@ class Bridge:
                 log.info("Not offering %s: a flight is in progress.", names)
         return [a for a in actions if not risky_one(a)]
 
+    def _too_old(self, captured_at: float | None, text: str, stage: str) -> bool:
+        """Has this command sat around long enough to be worth dropping?
+
+        Checked more than once. Transcription can take far longer than
+        expected when the simulator is starving the GPU, and the cloud can
+        take longer still - and pressing a button for something said half a
+        minute ago is worse than missing it.
+        """
+        if captured_at is None:
+            return False
+        limit = self.cfg.behaviour.max_command_age_seconds
+        if not limit:
+            return False
+        age = time.time() - captured_at
+        if age <= limit:
+            return False
+        log.warning("Ignoring %r - %s left it %.1fs old, past the %.0fs limit.",
+                    text, stage, age, limit)
+        return True
+
     def handle(self, audio, captured_at: float | None = None) -> None:
         started = time.time()
 
@@ -228,16 +248,8 @@ class Bridge:
 
         text, language = self.stt.transcribe(audio)
 
-        # Transcription can take far longer than expected when the simulator
-        # is starving the GPU. A command that old no longer reflects what the
-        # pilot wants pressed, so drop it rather than fire it late.
-        if captured_at is not None:
-            age = time.time() - captured_at
-            limit = self.cfg.behaviour.max_command_age_seconds
-            if limit and age > limit:
-                log.warning("Ignoring %r - it took %.1fs to transcribe, older "
-                            "than the %.0fs limit", text, age, limit)
-                return
+        if self._too_old(captured_at, text, "transcribing"):
+            return
 
         if not text:
             log.info("Nothing intelligible in that clip.")
@@ -269,6 +281,14 @@ class Bridge:
             return
 
         action = actions[decision.action_index]
+
+        # Again, because the clock does not stop once the words are decoded.
+        # A Gemini call that timed out and retried took one command to 31
+        # seconds - transcribed in 0.3s, so the check above waved it through,
+        # and SLC was told to start an engine half a minute after the fact.
+        if self._too_old(captured_at, text, "deciding"):
+            return
+
         elapsed = time.time() - started
 
         if self.cfg.behaviour.dry_run:

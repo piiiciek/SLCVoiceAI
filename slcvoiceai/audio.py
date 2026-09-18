@@ -127,42 +127,79 @@ class PushToTalk:
             self._held.clear()
 
     def _record_loop(self) -> None:
+        """Hold one input stream open and collect from it between presses.
+
+        The stream used to be opened when the key went down and closed when
+        it came up. Opening one is not instant, and while it happens the
+        pilot is already talking into nothing: four clips in one flight came
+        back too short to decode, one of them a quarter of a four-second
+        sentence. Opening it once removes that from the path entirely.
+        """
+        blocks: queue.Queue = queue.Queue()
+
+        def callback(indata, _frames, _time, status):
+            if status:
+                log.debug("audio status: %s", status)
+            blocks.put(indata.copy())
+
         while not self._stop.is_set():
-            if not self._held.wait(timeout=0.25):
-                continue
-
-            frames: list[np.ndarray] = []
-            blocks = queue.Queue()
-
-            def callback(indata, _frames, _time, status):
-                if status:
-                    log.debug("audio status: %s", status)
-                blocks.put(indata.copy())
-
             try:
                 with sd.InputStream(samplerate=self.cfg.sample_rate,
                                     channels=1, dtype="float32",
                                     device=self.device, callback=callback):
-                    max_frames = int(self.cfg.max_seconds * self.cfg.sample_rate)
-                    total = 0
-                    while self._held.is_set() and total < max_frames:
-                        try:
-                            block = blocks.get(timeout=0.1)
-                        except queue.Empty:
-                            continue
-                        frames.append(block)
-                        total += len(block)
+                    log.debug("Input stream open on device %s", self.device)
+                    self._collect(blocks)
             except Exception as exc:
                 log.error("Recording failed: %s", exc)
                 self._held.clear()
-                continue
+                # Do not spin on a device that has gone away - a microphone
+                # unplugged mid-flight would otherwise fill the log.
+                self._stop.wait(1.0)
 
+    def _collect(self, blocks: queue.Queue) -> None:
+        """Turn key presses into clips, for as long as the stream is open."""
+        max_frames = int(self.cfg.max_seconds * self.cfg.sample_rate)
+
+        while not self._stop.is_set():
+            # Everything recorded while nobody was talking. Dropped here
+            # rather than never captured, because the stream has been running
+            # the whole time.
+            while True:
+                try:
+                    blocks.get_nowait()
+                except queue.Empty:
+                    break
+
+            if not self._held.wait(timeout=0.25):
+                continue
+            pressed_at = time.time()
+
+            frames: list[np.ndarray] = []
+            total = 0
+            while self._held.is_set() and total < max_frames:
+                try:
+                    block = blocks.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                frames.append(block)
+                total += len(block)
+
+            held = time.time() - pressed_at
             if not frames:
+                log.debug("Key held %.2fs but nothing was recorded", held)
                 continue
             clip = np.concatenate(frames, axis=0).flatten()
             duration = len(clip) / self.cfg.sample_rate
             if duration < self.cfg.min_seconds:
-                log.debug("Clip too short (%.2fs), ignored", duration)
+                log.debug("Clip too short (%.2fs of %.2fs held), ignored",
+                          duration, held)
                 continue
-            log.info("Captured %.2fs of audio", duration)
+            # Saying both is what settles an argument the log could not:
+            # a clip far shorter than the press is the recorder's fault, one
+            # that matches it is a key let go early.
+            log.info("Captured %.2fs of audio (key held %.2fs)",
+                     duration, held)
+            if held - duration > 0.5:
+                log.warning("Recorded %.2fs of a %.2fs press - %.2fs of that "
+                            "was not captured.", duration, held, held - duration)
             self._clips.put((time.time(), clip))
