@@ -65,6 +65,7 @@ STATUS_STATES = {
 }
 
 _I18N_ATTR = re.compile(r'data-i18n(?:-[a-z-]+)?="([^"]+)"')
+_I18N_SAY = re.compile(r'\bsay\(\s*"([a-z][a-z0-9_.]+)"\s*\)')
 
 
 def _running_version() -> str:
@@ -72,14 +73,20 @@ def _running_version() -> str:
     return __version__
 
 
-def phrase_keys(html: str) -> list[str]:
-    """Every phrase the page asks for, read off its own markup.
+def phrase_keys(markup: str, script: str = "") -> list[str]:
+    """Every phrase the page asks for, read off the page itself.
 
     Collected rather than listed by hand: a hand-kept list drifts from the
     page the first time someone adds a label, and the failure mode is a
     pilot reading `card.controls` where a heading belongs.
+
+    Both places count. A label written in the markup carries a data-i18n
+    attribute, but rows the script builds - the hotkey card - ask for
+    their wording with say("..."), and scanning only the markup left those
+    showing their raw keys.
     """
-    return sorted(set(_I18N_ATTR.findall(html)))
+    return sorted(set(_I18N_ATTR.findall(markup))
+                  | set(_I18N_SAY.findall(script)))
 
 
 def tag_for(message: str, level: int) -> str:
@@ -183,16 +190,12 @@ class Api:
         self._app.open_repository()
 
     @_guard
-    def capture_key(self, code: str) -> dict:
-        return self._app.capture_key(str(code))
+    def set_binding(self, action: str, event: dict) -> dict:
+        return self._app.set_binding(str(action), event or {})
 
     @_guard
-    def save_hotkeys(self, rows: list) -> dict:
-        return self._app.save_hotkeys(rows or [])
-
-    @_guard
-    def read_slc_buttons(self) -> None:
-        self._app.read_slc_buttons()
+    def clear_binding(self, action: str) -> dict:
+        return self._app.clear_binding(str(action))
 
 
 class App:
@@ -205,7 +208,9 @@ class App:
         self.window = None
 
         i18n.set_language(cfg.ui.language)
-        self._keys = phrase_keys((WEB / "index.html").read_text(encoding="utf-8"))
+        self._keys = phrase_keys(
+            (WEB / "index.html").read_text(encoding="utf-8"),
+            (WEB / "panel.js").read_text(encoding="utf-8"))
 
         #: Which phrases are showing, so a language change can redraw them.
         self._status_key = "status.stopped"
@@ -438,58 +443,57 @@ class App:
         self._remember("behaviour", "min_confidence", value)
 
     # -- hotkeys -----------------------------------------------------------
-    #: What the page shows between the buttons of a sequence, and what it
-    #: sends back. A pipe rather than a comma because SLC really does have
-    #: a button called "GSX, START CATERING".
-    STEP = " | "
-
     def hotkey_rows(self) -> list[dict]:
-        return [{"key": key, "buttons": self.STEP.join(buttons)}
-                for key, buttons in sorted(self.cfg.hotkeys.items())]
+        """The three calls, each with the combination bound to it.
 
-    def capture_key(self, code: str) -> dict:
-        """Translate a key the pilot pressed in the panel into a name.
-
-        The page sends the raw browser code and gets back what config.toml
-        would call it, so nothing in the page has to know about pynput.
+        Always all three, bound or not: the set is fixed, so an unbound
+        call is a row showing nothing rather than a row that is missing.
         """
         from . import keys
+        from .hotkeys import ACTIONS
 
-        name = keys.from_browser_code(code)
-        if name is None:
-            return {"key": "", "error": t("hotkeys.unusable")}
-        if name == self.cfg.audio.ptt_key.strip().lower():
-            return {"key": "", "error": t("hotkeys.is_ptt", key=name)}
-        return {"key": name, "error": ""}
+        rows = []
+        for action in ACTIONS:
+            spec = self.cfg.hotkeys.get(action, "")
+            rows.append({"action": action,
+                         "label": t("hotkeys." + action),
+                         "combo": spec,
+                         "shown": keys.pretty(spec) if spec else ""})
+        return rows
 
-    def save_hotkeys(self, rows: list) -> dict:
-        """Take the page's whole list, check it, store it, arm it, save it.
-
-        The page sends everything rather than a single edit, so adding,
-        changing and removing are one code path - and the answer carries
-        the accepted list back, which is what stops the page and the
-        bridge ever disagreeing about what is bound.
-        """
+    def set_binding(self, action: str, event: dict) -> dict:
+        """Bind one call to the combination the pilot just pressed."""
         from . import keys
+        from .hotkeys import ACTIONS
 
-        bindings: dict[str, tuple[str, ...]] = {}
-        for row in rows:
-            name = str(row.get("key", "")).strip().lower()
-            buttons = tuple(part.strip() for part in
-                            str(row.get("buttons", "")).split("|")
-                            if part.strip())
-            if not name or not buttons:
-                continue                      # a half-filled row, not an error
-            try:
-                keys.parse_key(name, "hotkeys." + name)
-            except ValueError:
-                return self._hotkey_refusal(t("hotkeys.unusable"))
-            if name == self.cfg.audio.ptt_key.strip().lower():
-                return self._hotkey_refusal(t("hotkeys.is_ptt", key=name))
-            if name in bindings:
-                return self._hotkey_refusal(t("hotkeys.duplicate", key=name))
-            bindings[name] = buttons
+        if action not in ACTIONS:
+            return self._hotkey_refusal(t("hotkeys.unusable"))
 
+        spec = keys.from_browser(event or {})
+        if spec is None:
+            return self._hotkey_refusal(t("hotkeys.unusable"))
+
+        modifiers, key = keys.parse_combo(spec)
+        if not modifiers and key == self.cfg.audio.ptt_key.strip().lower():
+            return self._hotkey_refusal(t("hotkeys.is_ptt", key=key))
+
+        taken = [other for other, bound in self.cfg.hotkeys.items()
+                 if bound == spec and other != action]
+        if taken:
+            return self._hotkey_refusal(
+                t("hotkeys.duplicate", key=keys.pretty(spec)))
+
+        bindings = dict(self.cfg.hotkeys)
+        bindings[action] = spec
+        return self._store_hotkeys(bindings)
+
+    def clear_binding(self, action: str) -> dict:
+        bindings = {k: v for k, v in self.cfg.hotkeys.items() if k != action}
+        return self._store_hotkeys(bindings)
+
+    def _store_hotkeys(self, bindings: dict) -> dict:
+        """Keep it, arm it, save it - in that order, so a failure to write
+        still leaves the binding working for this session."""
         self.cfg.hotkeys = bindings
         self._rearm_hotkeys()
 
@@ -510,10 +514,13 @@ class App:
         return {"rows": self.hotkey_rows(), "error": message}
 
     def _describe_hotkeys(self) -> str:
+        from . import keys
+
         if not self.cfg.hotkeys:
             return t("hotkeys.none")
-        return ", ".join("{k} -> {b}".format(k=key, b=self.STEP.join(buttons))
-                         for key, buttons in sorted(self.cfg.hotkeys.items()))
+        return ", ".join(
+            "{k} -> {a}".format(k=keys.pretty(spec), a=t("hotkeys." + action))
+            for action, spec in sorted(self.cfg.hotkeys.items()))
 
     def _rearm_hotkeys(self) -> None:
         """Take effect now, not at the next start.
@@ -527,25 +534,6 @@ class App:
             self.hotkeys.stop()
         self.bridge.cfg.hotkeys = self.cfg.hotkeys
         self.hotkeys = self.bridge.start_hotkeys()
-
-    def read_slc_buttons(self) -> None:
-        """Offer what SLC is showing right now as suggestions.
-
-        Typing a button name from memory is how a binding ends up pointing
-        at nothing, and the names carry decoration nobody remembers.
-        """
-        def done(actions, error):
-            if error is not None:
-                self._write(t("feed.read_failed", error=error), "warn")
-                self._push("suggestions", [])
-                return
-            names = sorted({a.name for a in actions})
-            if not names:
-                self._write(t("feed.no_actions"), "warn")
-            self._push("suggestions", names)
-
-        self._write(t("feed.reading_slc"), "muted")
-        self._scan_in_background(done)
 
     def try_phrase(self, said: str) -> None:
         said = said.strip()

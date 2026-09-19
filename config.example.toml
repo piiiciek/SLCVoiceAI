@@ -188,37 +188,31 @@ log_file = "slcvoiceai.log"
 language = "auto"
 
 [hotkeys]
-# Keys bound straight to an SLC button, with no speaking involved.
+# Three calls, straight from the keyboard, with no speaking involved.
 #
-# The aircraft already has buttons for this - on an Airbus the ATT and MECH
-# calls on the overhead ring the cabin and the ground crew - but MSFS does
-# not always pass ATT through to SLC. These do the same job from the
-# keyboard, and they work whatever the aircraft.
+# An Airbus rings the cabin and the ground crew from ATT and MECH on the
+# overhead. SLC answers both, but MSFS does not reliably pass ATT through,
+# so the cabin call is the one that sticks. These do the same job from the
+# keyboard, whatever the aircraft.
 #
-# Left of the "=" is any key on your keyboard. Right of it is what the
-# button is called in SLC. Nothing is bound by default; uncomment what you
-# want. Delete a line to unbind it.
+# What each one presses is fixed. Only the keys are yours:
 #
-#   insert = "INTERCOM"        # call the cabin crew  (the ATT button)
-#   delete = "GROUND CREW"     # call the ground crew (the MECH button)
-#   home   = "P A SYSTEM"      # announcement to the passengers
+#   intercom  call the cabin crew        (the ATT button)
+#   ground    call the ground crew       (the MECH button)
+#   pa        announcement to passengers
 #
-# Names are matched loosely enough that "INTERCOM" finds the button SLC
-# shows as "INTERCOM >", and case does not matter. A name that fits more
-# than one button presses nothing rather than guessing - run
+# Nothing is bound by default. Uncomment what you want, or set it in the
+# panel, which writes it back here for you.
 #
-#     python -m slcvoiceai --list-actions
+#   intercom = "ctrl+q"
+#   ground   = "ctrl+w"
+#   pa       = "ctrl+e"
 #
-# with SLC in a flight to see exactly what it is offering right now.
+# Use a COMBINATION rather than a bare key. MSFS already has a binding for
+# nearly every single key, so ctrl+q is far likelier to be free than q.
 #
-# A binding can also be several buttons pressed in order, for something
-# behind a submenu. SLC is read again between them, so each step costs the
-# same few seconds a spoken command does:
-#
-#   end = ["GROUND CREW", "START BOARDING"]
-#
-# Key names: a single character, or one of insert, delete, home, end,
-# page_up, page_down, scroll_lock, pause, print_screen, f1-f20, num_lock,
-# menu, ctrl_r, alt_r, shift_r, caps_lock, tab, esc, space, backspace.
-# Pick something the simulator does not already use, and something other
-# than your ptt_key.
+# Modifiers: ctrl, alt, shift, cmd (also spelled win, super or meta). Left
+# and right count as the same modifier, so ctrl+q fires on either Ctrl.
+# The key itself is a single character, or a name: insert, delete, home,
+# end, page_up, page_down, scroll_lock, pause, f1-f20, num_lock, menu,
+# tab, esc, space, backspace, up, down, left, right.

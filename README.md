@@ -290,46 +290,43 @@ The **"try a phrase"** box runs the whole matching chain on typed text — no
 microphone, no flight needed. Useful for working out why a command missed, and
 for testing on the ground.
 
-### Hotkeys: a key straight to an SLC button
+### Hotkeys: three calls straight from the keyboard
 
 Some things do not need saying. An Airbus rings the cabin and the ground crew
 from two buttons on the overhead — ATT and MECH — and SLC answers both, but MSFS
-does not always pass ATT through, so the cabin call is the one that sticks.
+does not reliably pass ATT through, so the cabin call is the one that sticks.
 
-Bind a key instead, in `config.toml`:
+Three calls can be bound, and what each one presses is fixed:
+
+| setting | what it does |
+|---|---|
+| `intercom` | call the cabin crew — the **ATT** button |
+| `ground` | call the ground crew — the **MECH** button |
+| `pa` | announcement to the passengers |
+
+Set them in the panel: click a key in the **Keys bound to SLC buttons** card and
+press the combination you want. It is written to `config.toml` and armed on the
+spot — nothing needs restarting. Or write it yourself:
 
 ```toml
 [hotkeys]
-insert = "INTERCOM"        # call the cabin crew  (the ATT button)
-delete = "GROUND CREW"     # call the ground crew (the MECH button)
-home   = "P A SYSTEM"      # announcement to the passengers
+intercom = "ctrl+q"
+ground   = "ctrl+w"
+pa       = "ctrl+e"
 ```
 
-Or set them in the panel, which is easier: the **Keys bound to SLC buttons**
-card lists what is bound, and clicking a key and pressing a new one rebinds it.
-Every change is written straight back to `config.toml` and takes effect at once
-— nothing needs restarting. The ↻ next to the card reads SLC and offers what it
-is showing right now as you type, so a binding does not end up pointing at a
-button name misremembered.
+**Use a combination, not a bare key.** MSFS already has a binding for nearly
+every single key, so `ctrl+q` is far likelier to be free than `q`. Modifiers are
+`ctrl`, `alt`, `shift` and `cmd` (also spelled `win`, `super` or `meta`); left
+and right count as the same modifier, so `ctrl+q` fires on either Ctrl.
 
-Any key on the left, any SLC button on the right. Nothing is bound by default.
-`"INTERCOM"` finds the button SLC shows as `INTERCOM >`, and case does not
-matter — but a name that fits **more than one** button presses nothing rather
-than guessing, because a key standing in for a physical switch has to do the
-same thing every time. To see exactly what SLC is offering right now:
+Nothing is bound by default. A combination already given to another call is
+refused rather than quietly stolen, and so is the bare push-to-talk key — it
+would fire every time you spoke.
 
-```bash
-python -m slcvoiceai --list-actions
-```
-
-A binding can also be several buttons in order, for something behind a submenu —
-`end = ["GROUND CREW", "START BOARDING"]`. SLC is read again between steps,
-because the second button did not exist until the first was pressed, so each
-step costs the same few seconds a spoken command does.
-
-Hotkeys obey `dry_run`, and they are held to the same flight guard as speech: a
-key bound to something that would end the flight will not press it once one is
-underway.
+Hotkeys obey `dry_run`, and they are held to the same flight guard as speech.
+Pressing one costs the same few seconds a spoken command does, because SLC has
+to be read either way.
 
 ### Headless
 

@@ -112,20 +112,9 @@
       $("update").hidden = false;
     },
 
-    /** rows is [{key, buttons}], exactly as gui.py accepted them. */
+    /** rows is [{action, label, combo, shown}], all three, bound or not. */
     hotkeys: function (rows) {
-        drawHotkeys(rows || []);
-    },
-
-    /** Button names read out of SLC, offered as you type. */
-    suggestions: function (names) {
-      var list = $("slc-buttons");
-      list.textContent = "";
-      (names || []).forEach(function (name) {
-        var option = document.createElement("option");
-        option.value = name;
-        list.appendChild(option);
-      });
+      drawHotkeys(rows || []);
     },
 
     controls: function (state) {
@@ -217,72 +206,57 @@
      from that, so a refused binding cannot linger on screen looking saved. */
 
   var rows = [];
-  var listening = null;          // the keycap waiting for a key, if any
+  var listening = null;          // the row waiting for a combination, if any
 
   function drawHotkeys(fresh) {
-    rows = fresh.map(function (row) {
-      return { key: row.key, buttons: row.buttons };
-    });
+    rows = fresh || [];
     listening = null;
     render();
   }
 
   function render() {
     var host = $("hotkeys");
+    if (!host) return;
     host.textContent = "";
 
-    if (!rows.length) {
-      var empty = document.createElement("div");
-      empty.className = "empty";
-      empty.textContent = say("hotkeys.none");
-      host.appendChild(empty);
-      return;
-    }
-
-    rows.forEach(function (row, index) {
+    rows.forEach(function (row) {
       var line = document.createElement("div");
       line.className = "hotkey";
 
+      var label = document.createElement("span");
+      label.className = "what";
+      label.textContent = row.label;
+
       var cap = document.createElement("button");
-      cap.className = "keycap";
-      cap.textContent = row.key || say("hotkeys.press");
-      cap.addEventListener("click", function () { listenOn(cap, index); });
+      cap.className = "keycap" + (row.shown ? "" : " unbound");
+      cap.textContent = row.shown || say("hotkeys.unbound");
+      cap.addEventListener("click", function () { listenOn(cap, row.action); });
 
-      var arrow = document.createElement("span");
-      arrow.className = "arrow";
-      arrow.textContent = "→";
-
-      var box = document.createElement("input");
-      box.className = "text-input";
-      box.value = row.buttons;
-      box.placeholder = say("hotkeys.button");
-      box.setAttribute("list", "slc-buttons");
-      box.autocomplete = "off";
-      box.spellcheck = false;
-      box.addEventListener("input", function () { rows[index].buttons = box.value; });
-      box.addEventListener("change", commit);
-
-      var bin = document.createElement("button");
-      bin.className = "icon-btn";
-      bin.textContent = "×";
-      bin.title = say("hotkeys.remove");
-      bin.addEventListener("click", function () {
-        rows.splice(index, 1);
-        render();
-        commit();
+      var clear = document.createElement("button");
+      clear.className = "icon-btn";
+      clear.textContent = "×";
+      clear.title = say("hotkeys.clear");
+      clear.disabled = !row.shown;
+      clear.addEventListener("click", function () {
+        if (!api) return;
+        api.clear_binding(row.action).then(answered)
+           .catch(function (err) { console.error("clear_binding", err); });
       });
 
+      line.appendChild(label);
       line.appendChild(cap);
-      line.appendChild(arrow);
-      line.appendChild(box);
-      line.appendChild(bin);
+      line.appendChild(clear);
       host.appendChild(line);
     });
   }
 
-  function listenOn(cap, index) {
-    if (listening) listening.cap.classList.remove("listening");
-    listening = { cap: cap, index: index };
+  function answered(answer) {
+    if (answer && answer.rows) drawHotkeys(answer.rows);
+  }
+
+  function listenOn(cap, action) {
+    if (listening) render();       // drop whichever row was listening before
+    listening = { cap: cap, action: action };
     cap.classList.add("listening");
     cap.textContent = say("hotkeys.press");
     cap.focus();
@@ -295,49 +269,32 @@
     event.preventDefault();
     event.stopPropagation();
 
-    var at = listening;
-    if (event.code === "Escape") {          // changed your mind
-      at.cap.classList.remove("listening");
-      at.cap.textContent = rows[at.index].key || say("hotkeys.press");
-      listening = null;
+    // Ctrl on its own is the start of a combination, not a binding. Keep
+    // waiting rather than refusing something nobody meant to press.
+    if (event.key === "Control" || event.key === "Alt" ||
+        event.key === "Shift" || event.key === "Meta") {
       return;
     }
 
-    if (!api) return;
-    api.capture_key(event.code).then(function (answer) {
-      at.cap.classList.remove("listening");
-      listening = null;
-      if (answer && answer.key) {
-        rows[at.index].key = answer.key;
-        commit();
-      }
-      at.cap.textContent = rows[at.index] ? (rows[at.index].key
-                                             || say("hotkeys.press")) : "";
+    var at = listening;
+    listening = null;
+    if (event.code === "Escape") {          // changed your mind
       render();
-    }).catch(function (err) { console.error("capture_key", err); });
+      return;
+    }
+    if (!api) { render(); return; }
+
+    api.set_binding(at.action, {
+      code: event.code,
+      ctrl: event.ctrlKey,
+      alt: event.altKey,
+      shift: event.shiftKey,
+      meta: event.metaKey
+    }).then(answered).catch(function (err) {
+      console.error("set_binding", err);
+      render();
+    });
   }, true);
-
-  function commit() {
-    if (!api) return;
-    // A row being filled in - Add pressed, key chosen, button name not
-    // typed yet - is not something Python stores, so it does not come back
-    // in the answer. Carrying it over is what stops a new binding
-    // vanishing from under the pilot halfway through making it.
-    var pending = rows.filter(function (row) { return !row.key || !row.buttons; });
-    api.save_hotkeys(rows).then(function (answer) {
-      if (answer && answer.rows) drawHotkeys(answer.rows.concat(pending));
-    }).catch(function (err) { console.error("save_hotkeys", err); });
-  }
-
-  $("add-hotkey").addEventListener("click", function () {
-    rows.push({ key: "", buttons: "" });
-    render();
-    // Straight into capturing, since an empty row is not worth looking at.
-    var caps = $("hotkeys").querySelectorAll(".keycap");
-    if (caps.length) listenOn(caps[caps.length - 1], rows.length - 1);
-  });
-
-  $("read-slc").addEventListener("click", function () { ask("read_slc_buttons"); });
 
   /* ---------- start ---------------------------------------------------- */
 

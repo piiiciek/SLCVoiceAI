@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import re
 import tempfile
@@ -10,6 +11,8 @@ import threading
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -136,11 +139,11 @@ class Config:
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
     ui: UiConfig = field(default_factory=UiConfig)
 
-    #: Keys bound straight to SLC buttons: {"insert": ("INTERCOM",)}. Free
-    #: form, because the whole point is that a pilot picks the keys - so
-    #: unlike every section above, this one cannot be a dataclass with a
-    #: fixed set of fields.
-    hotkeys: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Key combinations for the three calls: {"intercom": "ctrl+q"}. The
+    #: calls are fixed (hotkeys.ACTIONS), only the keys are the pilot's -
+    #: which is why this is a plain dict and not a dataclass like the
+    #: sections above: its contents are bindings, not settings.
+    hotkeys: dict[str, str] = field(default_factory=dict)
 
     #: Where this was loaded from, so the panel can write a setting back to
     #: the same file. None when nobody loaded it from disk, which is what
@@ -253,30 +256,37 @@ def load(path: str | Path = "config.toml") -> Config:
                   **kwargs)
 
 
-def _read_hotkeys(raw: dict, path: Path) -> dict[str, tuple[str, ...]]:
-    """[hotkeys] as {key name: (button, ...)}.
+def _read_hotkeys(raw: dict, path: Path) -> dict[str, str]:
+    """[hotkeys] as {call: key combination}.
 
-    The only free-form section: its keys are whatever the pilot chose to
-    bind, so it cannot be validated against a list of known names the way
-    the others are. What it can be checked for is shape - a mistake here
-    would otherwise surface as a hotkey that silently does nothing.
+        intercom = "ctrl+q"
+        ground   = "ctrl+w"
+        pa       = "ctrl+e"
 
-    A binding is one button name or a list of them, pressed in order:
-
-        insert = "INTERCOM"
-        delete = ["GROUND CREW", "START BOARDING"]
+    The three calls are fixed - see hotkeys.ACTIONS - so only the keys are
+    the pilot's. Something unrecognised here is a warning and not an
+    error: refusing to start over a stale line in a config file is a poor
+    trade when the alternative is starting with one hotkey unbound.
     """
-    bindings: dict[str, tuple[str, ...]] = {}
-    for key, value in raw.items():
-        if isinstance(value, str):
-            value = [value]
-        if not isinstance(value, list) or not value or not all(
-                isinstance(v, str) and v.strip() for v in value):
-            raise ValueError(
-                "[hotkeys] {key} in {path} must be an SLC button name, or a "
-                "list of them: got {value!r}".format(key=key, path=path,
-                                                     value=value))
-        bindings[key.strip().lower()] = tuple(v.strip() for v in value)
+    from .hotkeys import ACTIONS
+    from .keys import canonical
+
+    bindings: dict[str, str] = {}
+    for action, value in raw.items():
+        name = str(action).strip().lower()
+        if name not in ACTIONS:
+            log.warning(
+                "[hotkeys] in %s: %r is not something that can be bound. "
+                "Use one of: %s", path, action, ", ".join(sorted(ACTIONS)))
+            continue
+        if not isinstance(value, str) or not value.strip():
+            log.warning("[hotkeys] %s in %s must be a key combination such "
+                        "as \"ctrl+q\"; ignoring %r.", name, path, value)
+            continue
+        try:
+            bindings[name] = canonical(value)
+        except ValueError as exc:
+            log.warning("[hotkeys] %s in %s: %s", name, path, exc)
     return bindings
 
 
@@ -419,19 +429,17 @@ def save_settings(path: str | Path, changes: dict[str, dict]) -> None:
         _replace_atomically(path, text)
 
 
-def save_hotkeys(path: str | Path, bindings: dict[str, tuple[str, ...]]) -> None:
-    """Write the whole [hotkeys] section, because bindings come and go.
+def save_hotkeys(path: str | Path, bindings: dict[str, str]) -> None:
+    """Write the whole [hotkeys] section.
 
-    A one-button binding is written as a plain string rather than a
-    one-item list: config.toml is meant to be read by the person editing
-    it, and `insert = "INTERCOM"` reads better than `["INTERCOM"]`.
+    Not a line patch like the other settings: a call can be unbound, and
+    an unbound call is a line that has to disappear rather than change.
     """
     path = Path(path)
-    values = {key: (tuple(buttons)[0] if len(buttons) == 1 else tuple(buttons))
-              for key, buttons in bindings.items()}
     with _SAVE_LOCK:
         text = path.read_text(encoding="utf-8") if path.exists() else ""
-        _replace_atomically(path, _replace_section(text, "hotkeys", values))
+        _replace_atomically(path, _replace_section(text, "hotkeys",
+                                                   dict(bindings)))
 
 
 def _replace_atomically(path: Path, text: str) -> None:

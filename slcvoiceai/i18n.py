@@ -57,18 +57,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "card.test": "Test without a microphone",
         "card.hotkeys": "Keys bound to SLC buttons",
         "pane.activity": "Activity",
-        # -- hotkeys
-        "hotkeys.press": "press a key",
-        "hotkeys.button": "SLC button, e.g. INTERCOM",
-        "hotkeys.add": "Add a key",
-        "hotkeys.remove": "Remove",
-        "hotkeys.read": "Read SLC for names",
+        # -- hotkeys. The three calls are named by what they do, not by
+        # what SLC calls the button - the pilot never types either.
+        "hotkeys.intercom": "Call the cabin crew  (ATT)",
+        "hotkeys.ground": "Call the ground crew  (MECH)",
+        "hotkeys.pa": "Announcement to the passengers",
+        "hotkeys.press": "press keys",
+        "hotkeys.unbound": "not set",
+        "hotkeys.clear": "Unbind",
         "hotkeys.none": "nothing bound",
-        "hotkeys.hint": ("Click a key to rebind it. Several buttons in one "
-                         "binding are separated with | and pressed in order."),
-        "hotkeys.unusable": "-- that key cannot be bound; try another",
+        "hotkeys.hint": ("Click a key to set it. A combination such as "
+                         "Ctrl + Q is usually free where a bare key is not - "
+                         "MSFS has most of them. Esc cancels."),
+        "hotkeys.unusable": "-- that cannot be bound; try another combination",
         "hotkeys.is_ptt": "-- {key} is already the push-to-talk key",
-        "hotkeys.duplicate": "-- {key} is bound twice; keeping the first",
+        "hotkeys.duplicate": "-- {key} is already bound to another call",
         # -- controls
         "control.dry_run": "Dry run (decide, never press)",
         "control.confidence": "min confidence",
@@ -94,7 +97,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     declined: {reason}",
         "feed.save_failed": "-- could not save that to config.toml: {error}",
         "feed.hotkeys": "-- keys: {what}",
-        "feed.reading_slc": "-- reading SLC for button names...",
         "feed.pass": "PASS",
         "feed.below_floor": "below floor",
         "feed.language_changed": "-- interface language: {name}",
@@ -118,18 +120,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "card.test": "Test bez mikrofonu",
         "card.hotkeys": "Klawisze pod przyciski SLC",
         "pane.activity": "Przebieg",
-        "hotkeys.press": "naciśnij klawisz",
-        "hotkeys.button": "przycisk SLC, np. INTERCOM",
-        "hotkeys.add": "Dodaj klawisz",
-        "hotkeys.remove": "Usuń",
-        "hotkeys.read": "Wczytaj nazwy z SLC",
+        "hotkeys.intercom": "Wezwij kabinę  (ATT)",
+        "hotkeys.ground": "Wezwij obsługę naziemną  (MECH)",
+        "hotkeys.pa": "Komunikat do pasażerów",
+        "hotkeys.press": "naciśnij klawisze",
+        "hotkeys.unbound": "nie przypisano",
+        "hotkeys.clear": "Odepnij",
         "hotkeys.none": "nic nie przypisano",
-        "hotkeys.hint": ("Kliknij klawisz, żeby go zmienić. Kilka przycisków "
-                         "w jednym wiązaniu rozdziel znakiem | - zostaną "
-                         "wciśnięte po kolei."),
-        "hotkeys.unusable": "-- tego klawisza nie da się przypisać; wybierz inny",
+        "hotkeys.hint": ("Kliknij klawisz, żeby go ustawić. Kombinacja w "
+                         "rodzaju Ctrl + Q zwykle jest wolna tam, gdzie goły "
+                         "klawisz nie jest - MSFS zajmuje większość. Esc "
+                         "anuluje."),
+        "hotkeys.unusable": "-- tego nie da się przypisać; spróbuj innej kombinacji",
         "hotkeys.is_ptt": "-- {key} jest już klawiszem do mówienia",
-        "hotkeys.duplicate": "-- {key} jest przypisany dwa razy; zostaje pierwszy",
+        "hotkeys.duplicate": "-- {key} jest już przypisany do innego wezwania",
         "control.dry_run": "Próba (decyduj, nic nie wciskaj)",
         "control.confidence": "min. pewność",
         "control.language": "język",
@@ -151,7 +155,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     odmowa: {reason}",
         "feed.save_failed": "-- nie udało się zapisać tego do config.toml: {error}",
         "feed.hotkeys": "-- klawisze: {what}",
-        "feed.reading_slc": "-- odczyt nazw przycisków z SLC...",
         "feed.pass": "PRZECHODZI",
         "feed.below_floor": "poniżej progu",
         "feed.language_changed": "-- język interfejsu: {name}",

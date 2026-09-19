@@ -132,7 +132,12 @@ def test_every_phrase_the_panel_asks_for_exists():
     """Catches a typo in a key, which would otherwise show the pilot a
     lowercase dotted identifier where a sentence belongs."""
     source = (ROOT / "slcvoiceai" / "gui.py").read_text(encoding="utf-8")
-    asked = set(re.findall(r'\bt\(\s*"([a-z][a-z0-9_.]+)"', source))
+    # The literal has to be the whole argument. `t("hotkeys." + action)`
+    # builds a key from a prefix, and reading that as the key "hotkeys."
+    # reports a phrase nobody was ever asking for. Keys assembled that way
+    # are checked where the pieces are known - see test_hotkeys.py and
+    # test_panel.py, which cover the hotkey labels and the status phrases.
+    asked = set(re.findall(r'\bt\(\s*"([a-z][a-z0-9_.]+)"\s*[,)]', source))
     assert asked, "no translated phrases found - did the panel stop using t()?"
     missing = sorted(asked - set(i18n.TRANSLATIONS["en"]))
     assert not missing, "the panel asks for phrases nobody wrote: " + str(missing)
@@ -148,9 +153,9 @@ def test_every_phrase_the_page_asks_for_exists():
     """
     from slcvoiceai.gui import phrase_keys
 
-    markup = (ROOT / "slcvoiceai" / "web" / "index.html").read_text(
-        encoding="utf-8")
-    asked = set(phrase_keys(markup))
+    web = ROOT / "slcvoiceai" / "web"
+    asked = set(phrase_keys((web / "index.html").read_text(encoding="utf-8"),
+                            (web / "panel.js").read_text(encoding="utf-8")))
     assert asked, "the page asks for no phrases - did the attributes change?"
     missing = sorted(asked - set(i18n.TRANSLATIONS["en"]))
     assert not missing, "the page asks for phrases nobody wrote: " + str(missing)

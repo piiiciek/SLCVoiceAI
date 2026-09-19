@@ -71,15 +71,10 @@
   </section>
 
   <section class="card">
-    <h2>
-      <span data-i18n="card.hotkeys"></span>
-      <button class="icon-btn" id="read-slc" data-i18n-title="hotkeys.read">&#8635;</button>
-    </h2>
+    <h2 data-i18n="card.hotkeys"></h2>
+    <!-- The three rows are built by panel.js from what gui.py sends: the
+         calls are fixed, so the page never invents one. -->
     <div class="hotkeys" id="hotkeys"></div>
-    <datalist id="slc-buttons"></datalist>
-    <div class="hotkey-foot">
-      <button class="ghost" id="add-hotkey" data-i18n="hotkeys.add"></button>
-    </div>
     <p class="hint" data-i18n="hotkeys.hint"></p>
   </section>
 

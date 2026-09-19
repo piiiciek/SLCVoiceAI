@@ -283,12 +283,13 @@ select:focus, .text-input:focus { border-color: var(--accent); }
 /* ---------- hotkeys ---------- */
 .hotkeys { display: flex; flex-direction: column; gap: 6px; }
 
-.hotkey { display: flex; align-items: center; gap: 7px; }
+.hotkey { display: flex; align-items: center; gap: 9px; min-height: 32px; }
+.hotkey .what { flex: 1; min-width: 0; font-size: 12px; }
 
 /* The key itself: shaped like a keycap, because that is what it is. */
 .keycap {
   flex-shrink: 0;
-  min-width: 96px;
+  min-width: 118px;
   padding: 6px 9px;
   font: 600 11px var(--mono);
   color: var(--fg);
@@ -301,6 +302,9 @@ select:focus, .text-input:focus { border-color: var(--accent); }
   white-space: nowrap;
 }
 .keycap:hover { border-color: var(--accent); }
+.keycap.unbound { color: var(--muted); font-style: italic; font-weight: 400; }
+.icon-btn:disabled { opacity: .3; cursor: default; }
+.icon-btn:disabled:hover { color: var(--muted); background: none; }
 .keycap.listening {
   color: var(--accent);
   border-color: var(--accent);
@@ -308,12 +312,6 @@ select:focus, .text-input:focus { border-color: var(--accent); }
   animation: waiting 1.1s ease-in-out infinite;
 }
 @keyframes waiting { 50% { opacity: .55; } }
-
-.hotkey .arrow { color: var(--muted); flex-shrink: 0; }
-.hotkey .text-input { font-size: 11.5px; padding: 6px 8px; }
-
-.hotkey-foot { margin-top: 9px; }
-.hotkey-foot .ghost { width: 100%; padding: 7px; }
 
 .hint {
   margin-top: 9px;

@@ -300,13 +300,6 @@ class Bridge:
         if not self.cfg.hotkeys:
             return None
 
-        clash = [k for k in self.cfg.hotkeys
-                 if k == self.cfg.audio.ptt_key.strip().lower()]
-        if clash:
-            log.warning("Hotkey %s is also the push-to-talk key, so it will do "
-                        "both. Give one of them a different key.",
-                        ", ".join(clash))
-
         listener = Hotkeys(self.cfg.hotkeys, self.press_named)
         listener.start()
         return listener

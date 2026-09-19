@@ -1,19 +1,18 @@
-"""Keys bound straight to SLC buttons, with no speaking involved.
+"""Three calls, on three key combinations.
 
-The aircraft has physical buttons for this. On an Airbus the ATT and MECH
-calls on the overhead ring the cabin and the ground crew, and SLC answers
-both - but MSFS does not always pass ATT through, so the one that opens
-the cabin is the one that sticks. A key on the keyboard is not a fix for
-that, but it does the same job from the same seat.
+The aircraft has buttons for this. On an Airbus the ATT and MECH calls on
+the overhead ring the cabin and the ground crew, and SLC answers both -
+but MSFS does not reliably pass ATT through, so the one that opens the
+cabin is the one that sticks.
 
-Nothing here knows what any SLC button is called. Every binding comes from
-config.toml, so a pilot can bind whatever keys they have free to whatever
-their SLC is offering:
+What is bound is fixed and what it presses is fixed. Only the keys are
+the pilot's to choose, because these three are the whole point: a general
+"bind any key to any button" was more rope than anyone asked for, and
+every extra field was another way to end up with a binding pointing at
+nothing.
 
-    [hotkeys]
-    insert = "INTERCOM"
-    delete = "GROUND CREW"
-    home = "P A SYSTEM"
+Combinations, not single keys: MSFS already has a binding for nearly
+every bare key, so `ctrl+q` is far likelier to be free than `q`.
 
 Two things this is careful about:
 
@@ -22,9 +21,9 @@ Two things this is careful about:
   machine, and reading SLC takes seconds - so a press hands off to a
   worker thread and returns immediately.
 
-* **Never queue.** Holding a key auto-repeats, and a scan outlasts a
-  press comfortably. A binding already working ignores further presses
-  rather than stacking up a run of clicks nobody asked for.
+* **Never queue.** A scan outlasts a keypress comfortably. A call already
+  working ignores further presses rather than stacking up a run of clicks
+  nobody asked for.
 """
 
 from __future__ import annotations
@@ -34,41 +33,67 @@ import threading
 
 from pynput import keyboard
 
-from .keys import parse_key
+from .keys import to_pynput
 
 log = logging.getLogger(__name__)
 
+#: The calls that can be bound, and the SLC buttons each one presses.
+#:
+#: The names on the right are what SLC really calls them - "P A SYSTEM"
+#: with the spaces, because that is the string the matcher normalises
+#: against. Nothing here is user-editable; the keys on the left are what
+#: config.toml and the panel talk about.
+ACTIONS: dict[str, tuple[str, ...]] = {
+    "intercom": ("INTERCOM",),
+    "ground": ("GROUND CREW",),
+    "pa": ("P A SYSTEM",),
+}
+
 
 class Hotkeys:
-    """Watches for bound keys and hands each press to `on_fire`.
+    """Watches for the bound combinations and hands each press to `on_fire`.
 
-    `on_fire(label, buttons)` is called on a worker thread, where `label`
-    is the key as written in config.toml and `buttons` is the sequence of
-    SLC buttons that press asked for.
+    `on_fire(action, buttons)` is called on a worker thread, where
+    `action` is one of ACTIONS and `buttons` is what it presses.
     """
 
-    def __init__(self, bindings: dict[str, tuple[str, ...]], on_fire):
-        # A list of pairs rather than a dict keyed by the key object:
-        # pynput hands the listener a KeyCode carrying a virtual-key code,
-        # which compares equal to one built from a character but need not
-        # hash the same. PushToTalk compares with == for the same reason.
-        self._bound = [(parse_key(name, "hotkeys." + name), name, tuple(buttons))
-                       for name, buttons in bindings.items()]
+    def __init__(self, bindings: dict[str, str], on_fire):
         self._on_fire = on_fire
-        self._listener: keyboard.Listener | None = None
+        self._listener: keyboard.GlobalHotKeys | None = None
         self._lock = threading.Lock()
-        self._held: set = set()
         self._busy: set = set()
+
+        # pynput does the combination matching, including treating left
+        # and right modifiers as one and swallowing the auto-repeat of a
+        # held key - all of which is fiddly to get right by hand.
+        self._combos: dict[str, str] = {}
+        self._map = {}
+        for action, spec in bindings.items():
+            if action not in ACTIONS or not spec:
+                continue
+            self._combos[action] = spec
+            self._map[to_pynput(spec)] = self._pressed(action)
+
+    def _pressed(self, action: str):
+        def fire():
+            with self._lock:
+                if action in self._busy:
+                    log.info("%s is still working; ignoring this press.", action)
+                    return
+                self._busy.add(action)
+            threading.Thread(target=self._work, args=(action,),
+                             daemon=True).start()
+        return fire
 
     # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
-        if not self._bound:
+        if not self._map:
             return
-        self._listener = keyboard.Listener(
-            on_press=self._on_press, on_release=self._on_release)
+        self._listener = keyboard.GlobalHotKeys(self._map)
         self._listener.start()
-        for _key, label, buttons in self._bound:
-            log.info("Hotkey %s -> %s", label, " then ".join(repr(b) for b in buttons))
+        for action, spec in self._combos.items():
+            log.info("Hotkey %s -> %s (%s)", spec, action,
+                     " then ".join(ACTIONS[action]))
 
     def stop(self) -> None:
         if self._listener:
@@ -76,47 +101,17 @@ class Hotkeys:
             self._listener = None
 
     def describe(self) -> str:
-        return ", ".join("{k} -> {b}".format(k=label, b=" then ".join(buttons))
-                         for _key, label, buttons in self._bound)
+        return ", ".join("{s} -> {a}".format(s=spec, a=action)
+                         for action, spec in self._combos.items())
 
     # -- internals ---------------------------------------------------------
-    def _match(self, key):
-        for bound, label, buttons in self._bound:
-            if key == bound:
-                return label, buttons
-        return None
-
-    def _on_press(self, key) -> None:
-        found = self._match(key)
-        if found is None:
-            return
-        label, buttons = found
-
-        with self._lock:
-            if label in self._held:
-                return                    # auto-repeat, not a second press
-            self._held.add(label)
-            if label in self._busy:
-                log.info("Hotkey %s is still working; ignoring this press.", label)
-                return
-            self._busy.add(label)
-
-        threading.Thread(target=self._fire, args=(label, buttons),
-                         daemon=True).start()
-
-    def _on_release(self, key) -> None:
-        found = self._match(key)
-        if found is not None:
-            with self._lock:
-                self._held.discard(found[0])
-
-    def _fire(self, label: str, buttons: tuple[str, ...]) -> None:
+    def _work(self, action: str) -> None:
         try:
-            self._on_fire(label, buttons)
+            self._on_fire(action, ACTIONS[action])
         except Exception:
             # A hotkey that throws must not take the listener - or the
             # bridge - down with it.
-            log.exception("Hotkey %s failed.", label)
+            log.exception("Hotkey %s failed.", action)
         finally:
             with self._lock:
-                self._busy.discard(label)
+                self._busy.discard(action)

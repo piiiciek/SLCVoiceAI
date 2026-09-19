@@ -83,6 +83,23 @@ def test_phrase_keys_finds_every_kind_of_attribute():
         "card.status", "feed.clear", "test.placeholder"]
 
 
+def test_phrase_keys_also_finds_what_the_script_asks_for():
+    """Rows the script builds carry no attributes for the sweep to find.
+    Missing them showed a pilot `hotkeys.unbound` on an unbound key."""
+    assert gui.phrase_keys("", 'cap.textContent = say("hotkeys.unbound");') == [
+        "hotkeys.unbound"]
+
+
+def test_no_phrase_the_script_asks_for_is_missing():
+    """The bug this pair of lines exists to prevent, on the real files."""
+    from slcvoiceai import i18n
+
+    asked = set(re.findall(r'\bsay\(\s*"([a-z][a-z0-9_.]+)"\s*\)', SCRIPT))
+    assert asked, "panel.js asks for no phrases - did say() get renamed?"
+    missing = sorted(asked - set(i18n.TRANSLATIONS["en"]))
+    assert not missing, "panel.js asks for phrases nobody wrote: " + str(missing)
+
+
 def test_phrase_keys_says_each_key_once():
     markup = '<b data-i18n="a.b"></b><i data-i18n="a.b"></i>'
     assert gui.phrase_keys(markup) == ["a.b"]
@@ -103,7 +120,7 @@ def test_the_page_carries_keys_and_not_sentences():
 def test_every_label_on_the_page_has_a_phrase(code):
     i18n.set_language(code)
     try:
-        for key in gui.phrase_keys(MARKUP):
+        for key in gui.phrase_keys(MARKUP, SCRIPT):
             assert i18n.t(key) != key, (
                 "{k} shows as a bare key in {c}".format(k=key, c=code))
     finally:
