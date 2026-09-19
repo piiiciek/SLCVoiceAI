@@ -12,21 +12,9 @@ import sounddevice as sd
 from pynput import keyboard
 
 from .config import AudioConfig
+from .keys import parse_key
 
 log = logging.getLogger(__name__)
-
-
-def _parse_key(name: str):
-    """Turn a config string such as 'f13', 'ctrl_r' or 'x' into a pynput key."""
-    name = name.strip().lower()
-    if hasattr(keyboard.Key, name):
-        return getattr(keyboard.Key, name)
-    if len(name) == 1:
-        return keyboard.KeyCode.from_char(name)
-    raise ValueError(
-        "Unrecognised ptt_key {name!r}. Use a pynput key name (f13, ctrl_r, "
-        "alt_r, scroll_lock, ...) or a single character.".format(name=name)
-    )
 
 
 def resolve_device(name: str):
@@ -49,7 +37,7 @@ class PushToTalk:
 
     def __init__(self, cfg: AudioConfig, on_talk_start=None):
         self.cfg = cfg
-        self.key = _parse_key(cfg.ptt_key)
+        self.key = parse_key(cfg.ptt_key, "ptt_key")
         self.device = resolve_device(cfg.input_device)
         #: Called once as the key goes down, before a word has been said.
         #: The bridge uses it to start reading SLC's buttons during the

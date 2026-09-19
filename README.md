@@ -290,6 +290,40 @@ The **"try a phrase"** box runs the whole matching chain on typed text — no
 microphone, no flight needed. Useful for working out why a command missed, and
 for testing on the ground.
 
+### Hotkeys: a key straight to an SLC button
+
+Some things do not need saying. An Airbus rings the cabin and the ground crew
+from two buttons on the overhead — ATT and MECH — and SLC answers both, but MSFS
+does not always pass ATT through, so the cabin call is the one that sticks.
+
+Bind a key instead, in `config.toml`:
+
+```toml
+[hotkeys]
+insert = "INTERCOM"        # call the cabin crew  (the ATT button)
+delete = "GROUND CREW"     # call the ground crew (the MECH button)
+home   = "P A SYSTEM"      # announcement to the passengers
+```
+
+Any key on the left, any SLC button on the right. Nothing is bound by default.
+`"INTERCOM"` finds the button SLC shows as `INTERCOM >`, and case does not
+matter — but a name that fits **more than one** button presses nothing rather
+than guessing, because a key standing in for a physical switch has to do the
+same thing every time. To see exactly what SLC is offering right now:
+
+```bash
+python -m slcvoiceai --list-actions
+```
+
+A binding can also be several buttons in order, for something behind a submenu —
+`end = ["GROUND CREW", "START BOARDING"]`. SLC is read again between steps,
+because the second button did not exist until the first was pressed, so each
+step costs the same few seconds a spoken command does.
+
+Hotkeys obey `dry_run`, and they are held to the same flight guard as speech: a
+key bound to something that would end the flight will not press it once one is
+underway.
+
 ### Headless
 
 Always start in dry-run, which decides and logs but never presses anything:
@@ -366,6 +400,8 @@ slcvoiceai/
   hardware.py   VRAM detection and model selection
   vocabulary.py Whisper hint list
   gemini.py     Gemini fallback matcher
+  keys.py       config key names -> a key to listen for
+  hotkeys.py    keys bound straight to an SLC button, no speaking
   gui.py        control panel (--gui): decides, and drives the page
   web/          the panel's markup, stylesheet and script - layout only
   i18n.py       panel wording, English and Polish
@@ -389,6 +425,8 @@ tests/
   test_update.py    version comparison, and failing quietly offline
   test_i18n.py      translations stay complete and keep their placeholders
   test_panel.py     what an activity line means, and the Python/page seam
+  test_hotkeys.py   a bound key does one thing, or nothing
+  test_config_save.py  writing a setting back without wrecking config.toml
   test_bump_version.py  the version never moves backwards
   test_config_keys.py  API keys: resolved, masked, never committed
 ```

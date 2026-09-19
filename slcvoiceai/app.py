@@ -216,6 +216,101 @@ class Bridge:
                 log.info("Not offering %s: a flight is in progress.", names)
         return [a for a in actions if not risky_one(a)]
 
+    # -- pressing a button by name, with no speaking involved ---------------
+    def find_named(self, actions: list, wanted: str):
+        """The one action called `wanted`, or None.
+
+        A hotkey has to do the same thing every single time, so this is
+        deliberately not the fuzzy matcher. Names are compared normalised -
+        which is what lets config.toml say "INTERCOM" for a button SLC
+        calls "INTERCOM >" - and a name fitting more than one button
+        presses nothing at all. Guessing is reasonable when someone is
+        speaking and can hear the result; it is not reasonable for a key
+        that is standing in for a physical button.
+        """
+        from .intent import normalise
+
+        target = normalise(wanted, spoken=False)
+        if not target:
+            return None
+
+        exact = [a for a in actions if normalise(a.name, spoken=False) == target]
+        found = exact or [a for a in actions
+                          if target in normalise(a.name, spoken=False)]
+        if len(found) == 1:
+            return found[0]
+        if found:
+            log.warning("Hotkey name %r matches %d buttons (%s) - pressing "
+                        "none of them.", wanted, len(found),
+                        ", ".join(repr(a.name) for a in found))
+        return None
+
+    def press_named(self, label: str, wanted: tuple[str, ...]) -> None:
+        """Press SLC buttons by name, in order, for a hotkey.
+
+        SLC is read again between presses because that is the point of a
+        sequence: the first button opens a submenu, and the buttons behind
+        it did not exist a moment ago.
+        """
+        for step, name in enumerate(wanted, start=1):
+            started = time.time()
+            try:
+                actions = self.ui.list_actions()
+            except Exception as exc:
+                log.error("Hotkey %s: could not read SLC: %s", label, exc)
+                return
+
+            if not actions:
+                log.warning("Hotkey %s: SLC is offering no buttons right now "
+                            "(is it running, and in a flight?).", label)
+                return
+
+            # The same guard the spoken path uses. A key bound to something
+            # that would end the flight is still something that would end
+            # the flight.
+            actions = self._without_flight_enders(
+                actions, read_flight_context(self.cfg.slc.stream_export_dir))
+
+            action = self.find_named(actions, name)
+            if action is None:
+                log.warning("Hotkey %s: nothing called %r among %d button(s): %s",
+                            label, name, len(actions),
+                            ", ".join(a.name for a in actions))
+                return
+
+            if self.cfg.behaviour.dry_run:
+                log.info("DRY RUN - would press %r  (hotkey %s, step %d/%d)",
+                         action.name, label, step, len(wanted))
+                continue
+
+            try:
+                action.invoke()
+                log.info("Pressed %r  (hotkey %s, step %d/%d, %.1fs)",
+                         action.name, label, step, len(wanted),
+                         time.time() - started)
+            except Exception as exc:
+                log.error("Hotkey %s: could not press %r: %s",
+                          label, action.name, exc)
+                return
+
+    def start_hotkeys(self):
+        """Arm the configured hotkeys, or return None if there are none."""
+        from .hotkeys import Hotkeys
+
+        if not self.cfg.hotkeys:
+            return None
+
+        clash = [k for k in self.cfg.hotkeys
+                 if k == self.cfg.audio.ptt_key.strip().lower()]
+        if clash:
+            log.warning("Hotkey %s is also the push-to-talk key, so it will do "
+                        "both. Give one of them a different key.",
+                        ", ".join(clash))
+
+        listener = Hotkeys(self.cfg.hotkeys, self.press_named)
+        listener.start()
+        return listener
+
     def _too_old(self, captured_at: float | None, text: str, stage: str) -> bool:
         """Has this command sat around long enough to be worth dropping?
 
@@ -308,6 +403,7 @@ class Bridge:
 
         ptt = PushToTalk(self.cfg.audio, on_talk_start=self.prescan)
         ptt.start()
+        hotkeys = self.start_hotkeys()
 
         if self.cfg.behaviour.check_for_updates:
             # On a worker, because a slow network must not delay the point at
@@ -331,4 +427,6 @@ class Bridge:
             log.info("Shutting down.")
         finally:
             ptt.stop()
+            if hotkeys is not None:
+                hotkeys.stop()
         return 0

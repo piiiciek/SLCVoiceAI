@@ -189,6 +189,7 @@ class App:
         self.ui = SlcUI(cfg.slc.process_name)
         self.bridge = None
         self.ptt = None
+        self.hotkeys = None
         self.window = None
 
         i18n.set_language(cfg.ui.language)
@@ -481,6 +482,7 @@ class App:
             bridge = Bridge(self.cfg)
             ptt = PushToTalk(self.cfg.audio, on_talk_start=bridge.prescan)
             ptt.start()
+            self.hotkeys = bridge.start_hotkeys()
             self.bridge, self.ptt = bridge, ptt
             self._started()
             for captured_at, clip in ptt.clips():
@@ -514,7 +516,9 @@ class App:
     def _stop(self) -> None:
         if self.ptt is not None:
             self.ptt.stop()
-        self.bridge, self.ptt = None, None
+        if self.hotkeys is not None:
+            self.hotkeys.stop()
+        self.bridge, self.ptt, self.hotkeys = None, None, None
         self._set_status("status.stopped")
         self._subtitle = ""
         self._push("subtitle", "")
@@ -525,6 +529,8 @@ class App:
         self._closing = True
         if self.ptt is not None:
             self.ptt.stop()
+        if self.hotkeys is not None:
+            self.hotkeys.stop()
         # Let the pump out of its wait, whichever side of boot it is on.
         self._ready.set()
         self._outbox.put((None, ()))

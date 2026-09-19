@@ -136,6 +136,12 @@ class Config:
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
     ui: UiConfig = field(default_factory=UiConfig)
 
+    #: Keys bound straight to SLC buttons: {"insert": ("INTERCOM",)}. Free
+    #: form, because the whole point is that a pilot picks the keys - so
+    #: unlike every section above, this one cannot be a dataclass with a
+    #: fixed set of fields.
+    hotkeys: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
     #: Where this was loaded from, so the panel can write a setting back to
     #: the same file. None when nobody loaded it from disk, which is what
     #: stops tests and headless defaults writing anything.
@@ -243,7 +249,35 @@ def load(path: str | Path = "config.toml") -> Config:
                     section=section, path=path, keys=", ".join(sorted(unknown)))
             )
         kwargs[section] = cls(**values)
-    return Config(source=path, **kwargs)
+    return Config(source=path, hotkeys=_read_hotkeys(raw.get("hotkeys", {}), path),
+                  **kwargs)
+
+
+def _read_hotkeys(raw: dict, path: Path) -> dict[str, tuple[str, ...]]:
+    """[hotkeys] as {key name: (button, ...)}.
+
+    The only free-form section: its keys are whatever the pilot chose to
+    bind, so it cannot be validated against a list of known names the way
+    the others are. What it can be checked for is shape - a mistake here
+    would otherwise surface as a hotkey that silently does nothing.
+
+    A binding is one button name or a list of them, pressed in order:
+
+        insert = "INTERCOM"
+        delete = ["GROUND CREW", "START BOARDING"]
+    """
+    bindings: dict[str, tuple[str, ...]] = {}
+    for key, value in raw.items():
+        if isinstance(value, str):
+            value = [value]
+        if not isinstance(value, list) or not value or not all(
+                isinstance(v, str) and v.strip() for v in value):
+            raise ValueError(
+                "[hotkeys] {key} in {path} must be an SLC button name, or a "
+                "list of them: got {value!r}".format(key=key, path=path,
+                                                     value=value))
+        bindings[key.strip().lower()] = tuple(v.strip() for v in value)
+    return bindings
 
 
 # --------------------------------------------------------------------------
