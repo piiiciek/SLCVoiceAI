@@ -333,10 +333,17 @@ class App:
         The activity feed is left as it stands: those lines are a record of
         what happened, and rewriting history in a new language would be a
         strange thing for a log to do. New entries arrive translated.
+
+        The rule for everything else: what the page was sent as finished
+        text has to be sent again. The data-i18n sweep in panel.js only
+        redraws what carries a key, and anything Python translated before
+        putting it in a message - a status phrase, a hotkey's label - is
+        already a sentence by the time the page sees it.
         """
         self._push("phrases", self.phrases())
         self._set_status(self._status_key)
         self._set_button(self._button_key, self._button_enabled)
+        self._push("hotkeys", self.hotkey_rows())
         if self.bridge is not None:
             self._describe_bridge()
         if self._update_version:

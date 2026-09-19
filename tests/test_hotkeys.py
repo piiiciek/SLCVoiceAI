@@ -466,6 +466,45 @@ def test_the_comment_block_in_the_section_survives_an_edit(tmp_path):
     assert "# the ATT button" in after, "the note on the surviving key was lost"
 
 
+def sent_to_the_page(panel) -> dict:
+    """Everything queued for the page since it was last drained."""
+    sent = {}
+    while not panel._outbox.empty():
+        function, args = panel._outbox.get_nowait()
+        sent.setdefault(function, []).append(args)
+    return sent
+
+
+def test_changing_language_redraws_the_labels(tmp_path):
+    """The labels are translated in Python and arrive as finished text, so
+    the data-i18n sweep in the page cannot redraw them - they have to be
+    sent again. Until they were, the card kept the old language until a
+    binding happened to change and brought a fresh set of rows with it.
+    """
+    from slcvoiceai import i18n
+
+    panel = panel_with(tmp_path)
+    panel.set_binding("intercom", {"code": "KeyQ", "ctrl": True})
+    try:
+        i18n.set_language("pl")
+        panel._retranslate()
+        sent_to_the_page(panel)                 # start from a clean outbox
+
+        i18n.set_language("en")
+        panel._retranslate()
+        sent = sent_to_the_page(panel)
+
+        assert "hotkeys" in sent, (
+            "a language change did not re-send the hotkey rows")
+        rows = sent["hotkeys"][-1][0]
+        labels = {row["action"]: row["label"] for row in rows}
+        assert labels["intercom"] == i18n.TRANSLATIONS["en"]["hotkeys.intercom"]
+        assert "Ctrl + Q" in [row["shown"] for row in rows], (
+            "the binding was lost in the redraw")
+    finally:
+        i18n.set_language("en")
+
+
 def test_every_call_has_a_label_in_every_language():
     from slcvoiceai import i18n
 
