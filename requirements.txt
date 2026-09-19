@@ -6,6 +6,11 @@ uiautomation>=2.0.18
 pydantic>=2.7
 rapidfuzz>=3.9
 
+# The control panel (--gui). Draws its window with the WebView2 runtime
+# that already ships with Windows 10 and 11, so this installs 2.6 MB and
+# bundles no browser. Not needed to run headless.
+pywebview>=5.0
+
 # CUDA runtime for ctranslate2. faster-whisper loads the model on the GPU
 # without these and then dies on the first transcription with
 # "Library cublas64_12.dll is not found" - they are not optional on Windows

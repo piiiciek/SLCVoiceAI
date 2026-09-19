@@ -1,8 +1,5 @@
 """A small always-on-top panel for running and tuning the bridge.
 
-Built on tkinter so it adds no dependencies, and kept narrow enough to sit
-beside a full-screen simulator.
-
 The point of this window is to answer, without reading a log file:
 
 * is the bridge actually listening, and on which device
@@ -14,15 +11,39 @@ without a microphone and without being in a flight. That reads SLC when
 you ask it to and not before: a live list of SLC's buttons, refreshed on a
 timer, meant the panel scanned SLC continuously for as long as it was open
 and competed with the scans that carry a command.
+
+Why a webview and not tkinter
+-----------------------------
+
+The window is drawn by the WebView2 runtime that ships with Windows, via
+`pywebview`. Nothing here bundles a browser: the engine is already on the
+machine, and the dependency costs 2.6 MB to install beside the 2 GB of
+CUDA libraries faster-whisper already requires. The panel it replaced was
+tkinter, chosen back when the alternative looked like shipping 200 MB.
+
+The split is strict, and worth keeping that way:
+
+* Python owns every decision and every word. What an entry means, whether
+  a score passes, which language a phrase is in - all answered here.
+* `web/` owns nothing but layout. It holds no wording, only keys.
+
+So adding a language still means editing `i18n.py` alone, and the rules
+the old panel was careful about - the log stays in English, the feed is
+never retranslated - are unchanged and now have tests of their own.
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import functools
+import json
 import logging
 import queue
+import re
 import threading
-import tkinter as tk
-from tkinter import ttk
+from pathlib import Path
+
+import webview
 
 from . import i18n
 from .config import Config
@@ -31,24 +52,69 @@ from .slc_ui import SlcUI
 
 log = logging.getLogger(__name__)
 
+WEB = Path(__file__).resolve().parent / "web"
+
+#: Which CSS state each status phrase puts the card into. It lives here
+#: rather than in the page so the page never has to recognise the word
+#: "listening" in the pilot's language.
+STATUS_STATES = {
+    "status.stopped": "stopped",
+    "status.loading": "loading",
+    "status.listening": "listening",
+    "status.failed": "failed",
+}
+
+_I18N_ATTR = re.compile(r'data-i18n(?:-[a-z-]+)?="([^"]+)"')
+
 
 def _running_version() -> str:
     from . import __version__
     return __version__
 
-BG = "#11161c"
-FG = "#d6dde5"
-MUTED = "#7c8899"
-ACCENT = "#4fa3ff"
-OK = "#4ec46e"
-WARN = "#e0a63c"
-BAD = "#e0604c"
-FONT = ("Consolas", 9)
-FONT_UI = ("Segoe UI", 9)
+
+def phrase_keys(html: str) -> list[str]:
+    """Every phrase the page asks for, read off its own markup.
+
+    Collected rather than listed by hand: a hand-kept list drifts from the
+    page the first time someone adds a label, and the failure mode is a
+    pilot reading `card.controls` where a heading belongs.
+    """
+    return sorted(set(_I18N_ATTR.findall(html)))
+
+
+def tag_for(message: str, level: int) -> str:
+    """Which colour an activity line gets.
+
+    Matching on English words in the log is deliberate, and is the reason
+    the log is not translated: `tools/replay_log.py` parses the same words,
+    and every log already sent to someone for help is in English.
+    Translating them would break colouring and replay at once.
+
+    The words have to be ones the bridge really logs, which the old panel
+    had no way to check - it carried a branch for "Below confidence" that
+    nothing has ever written. A decline is logged as "Declined: <reason>"
+    and is caught below. tests/test_panel.py now holds the two sides
+    together.
+    """
+    if level >= logging.ERROR:
+        return "bad"
+    if level >= logging.WARNING:
+        return "warn"
+    if "Pressed" in message:
+        return "ok"
+    if "DRY RUN" in message:
+        return "accent"
+    if "Transcribed" in message or "Captured" in message:
+        return "plain"
+    if "Declined" in message:
+        return "warn"
+    if "Ready" in message:
+        return "ok"
+    return "muted"
 
 
 class QueueHandler(logging.Handler):
-    """Funnel log records to the GUI thread."""
+    """Funnel log records to the panel."""
 
     def __init__(self, sink: queue.Queue):
         super().__init__()
@@ -62,127 +128,122 @@ class QueueHandler(logging.Handler):
             pass
 
 
+def _guard(method):
+    """Nothing the page calls may raise into pywebview's bridge.
+
+    An exception there becomes a rejected promise the pilot never sees,
+    leaving the panel looking wedged with no clue why.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        except Exception:
+            log.exception("Panel action %s failed", method.__name__)
+            return None
+    return wrapper
+
+
+class Api:
+    """The methods the page is allowed to call.
+
+    Deliberately thin: everything public here is reachable from
+    JavaScript, so the surface stays at what the panel's controls need.
+    """
+
+    def __init__(self, app: "App"):
+        self._app = app
+
+    @_guard
+    def boot(self) -> dict:
+        return self._app.opening_state()
+
+    @_guard
+    def toggle(self) -> None:
+        self._app.toggle()
+
+    @_guard
+    def set_dry(self, on: bool) -> None:
+        self._app.set_dry(bool(on))
+
+    @_guard
+    def set_threshold(self, value: float) -> None:
+        self._app.set_threshold(float(value))
+
+    @_guard
+    def set_language(self, code: str) -> None:
+        self._app.set_language(str(code))
+
+    @_guard
+    def try_phrase(self, said: str) -> None:
+        self._app.try_phrase(str(said))
+
+    @_guard
+    def open_repository(self) -> None:
+        self._app.open_repository()
+
+
 class App:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.ui = SlcUI(cfg.slc.process_name)
         self.bridge = None
         self.ptt = None
-        self.records: queue.Queue = queue.Queue()
+        self.window = None
+
         i18n.set_language(cfg.ui.language)
-        #: Which status phrase is showing, so a language change can redraw it.
+        self._keys = phrase_keys((WEB / "index.html").read_text(encoding="utf-8"))
+
+        #: Which phrases are showing, so a language change can redraw them.
         self._status_key = "status.stopped"
-        self._status_colour = MUTED
+        self._button_key = "button.start"
+        self._button_enabled = True
+        self._subtitle = ""
         self._update_version = None
 
-        self.root = tk.Tk()
-        self.root.title("SLCVoiceAI")
-        self.root.configure(bg=BG)
-        self.root.geometry("560x680")
-        self.root.attributes("-topmost", True)
-        self._build()
-        self._attach_logging()
-        self.root.after(120, self._drain)
-        self.root.after(400, self._check_for_updates)
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.records: queue.Queue = queue.Queue()
+        self._outbox: queue.Queue = queue.Queue()
+        #: Entries written before the page existed to show them.
+        self._pending: list[dict] = []
+        self._lock = threading.Lock()
+        self._ready = threading.Event()
+        self._closing = False
 
-    # -- layout ------------------------------------------------------------
-    def _build(self) -> None:
-        style = ttk.Style()
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-        style.configure("TFrame", background=BG)
-        style.configure("TLabel", background=BG, foreground=FG, font=FONT_UI)
-        style.configure("TButton", font=FONT_UI)
-        style.configure("TCheckbutton", background=BG, foreground=FG, font=FONT_UI)
-        style.configure("Horizontal.TScale", background=BG)
+    # -- talking to the page -----------------------------------------------
+    def _push(self, function: str, *args) -> None:
+        """Queue a call into the page.
 
-        top = ttk.Frame(self.root, padding=(10, 8))
-        top.pack(fill="x")
+        Everything goes through one queue drained by one thread, which
+        keeps entries in order and means a method the page calls never
+        blocks waiting for the page to answer.
+        """
+        self._outbox.put((function, args))
 
-        self.status = tk.Label(top, text=t("status.stopped"), bg=BG, fg=MUTED,
-                               font=("Segoe UI", 10, "bold"))
-        self.status.pack(side="left")
+    def _pump(self) -> None:
+        # Nothing may be evaluated until the page has booted, or it lands
+        # in a document that has not run panel.js yet.
+        self._ready.wait()
+        while True:
+            function, args = self._outbox.get()
+            if function is None or self._closing:
+                break
+            payload = ", ".join(json.dumps(arg) for arg in args)
+            try:
+                self.window.evaluate_js("window.panel && panel.{f}({a});".format(
+                    f=function, a=payload))
+            except Exception:
+                # The window can go away between the check and the call.
+                log.debug("Could not reach the panel with %s()", function,
+                          exc_info=True)
 
-        self.btn = ttk.Button(top, text=t("button.start"), command=self._toggle)
-        self.btn.pack(side="right")
-
-        self.subtitle = tk.Label(self.root, text="", bg=BG, fg=MUTED, font=FONT,
-                                 anchor="w", padx=10)
-        self.subtitle.pack(fill="x")
-
-        # Stays out of the layout entirely until there is something to say.
-        self.update_banner = tk.Label(
-            self.root, text="", bg="#1d2a1f", fg=OK, font=FONT_UI,
-            anchor="w", padx=10, pady=5, cursor="hand2")
-        self.update_banner.bind(
-            "<Button-1>", lambda _e: self._open_repository())
-
-        # -- controls
-        ctrl = ttk.Frame(self.root, padding=(10, 6))
-        ctrl.pack(fill="x")
-
-        self.dry = tk.BooleanVar(value=self.cfg.behaviour.dry_run)
-        self.dry_check = ttk.Checkbutton(
-            ctrl, text=t("control.dry_run"), variable=self.dry,
-            command=self._sync_dry)
-        self.dry_check.pack(side="left")
-
-        self.conf_label = tk.Label(ctrl, text=t("control.confidence"), bg=BG,
-                                   fg=MUTED, font=FONT)
-        self.conf_label.pack(side="left", padx=(16, 4))
-        self.thresh = tk.DoubleVar(value=self.cfg.behaviour.min_confidence)
-        scale = ttk.Scale(ctrl, from_=0.3, to=0.95, variable=self.thresh,
-                          command=self._sync_threshold, length=110)
-        scale.pack(side="left")
-        self.thresh_lbl = tk.Label(ctrl, text="{:.2f}".format(self.thresh.get()),
-                                   bg=BG, fg=ACCENT, font=FONT, width=5)
-        self.thresh_lbl.pack(side="left")
-
-        self.lang_label = tk.Label(ctrl, text=t("control.language"), bg=BG,
-                                   fg=MUTED, font=FONT)
-        self.lang_label.pack(side="left", padx=(16, 4))
-        names = i18n.available()
-        self.lang = tk.StringVar(value=names.get(i18n.current(), "English"))
-        picker = ttk.OptionMenu(ctrl, self.lang, self.lang.get(),
-                                *names.values(), command=self._sync_language)
-        picker.configure(width=8)
-        picker.pack(side="left")
-
-        # -- typed test
-        test = ttk.Frame(self.root, padding=(10, 4))
-        test.pack(fill="x")
-        self.test_label = tk.Label(test, text=t("test.prompt"), bg=BG, fg=MUTED,
-                                   font=FONT)
-        self.test_label.pack(anchor="w")
-        row = ttk.Frame(test)
-        row.pack(fill="x", pady=(3, 0))
-        self.entry = tk.Entry(row, bg="#1b222b", fg=FG, insertbackground=FG,
-                              relief="flat", font=FONT)
-        self.entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.entry.bind("<Return>", lambda _e: self._try_phrase())
-        self.match_btn = ttk.Button(row, text=t("test.match"),
-                                    command=self._try_phrase)
-        self.match_btn.pack(side="left", padx=(6, 0))
-
-        # -- panes
-        panes = ttk.Frame(self.root, padding=(10, 8))
-        panes.pack(fill="both", expand=True)
-
-        self.activity_label = tk.Label(panes, text=t("pane.activity"), bg=BG,
-                                       fg=MUTED, font=("Segoe UI", 8, "bold"))
-        self.activity_label.pack(anchor="w")
-        self.feed = tk.Text(panes, height=16, bg="#161c24", fg=FG, relief="flat",
-                            font=FONT, wrap="word", padx=8, pady=6)
-        self.feed.pack(fill="both", expand=True)
-        self.feed.tag_config("muted", foreground=MUTED)
-        self.feed.tag_config("ok", foreground=OK)
-        self.feed.tag_config("warn", foreground=WARN)
-        self.feed.tag_config("bad", foreground=BAD)
-        self.feed.tag_config("accent", foreground=ACCENT)
-        self.feed.configure(state="disabled")
+    def _write(self, text: str, tag: str = "muted") -> None:
+        entry = {"time": "{:%H:%M:%S}".format(dt.datetime.now()),
+                 "text": text, "tag": tag}
+        with self._lock:
+            if not self._ready.is_set():
+                self._pending.append(entry)
+                return
+        self._push("feed", entry)
 
     # -- logging bridge ----------------------------------------------------
     def _attach_logging(self) -> None:
@@ -192,45 +253,73 @@ class App:
         root.addHandler(handler)
         root.setLevel(logging.INFO)
 
-    def _write(self, text: str, tag: str = "") -> None:
-        self.feed.configure(state="normal")
-        self.feed.insert("end", text + "\n", tag)
-        # Keep the buffer from growing without bound over a long flight.
-        if int(self.feed.index("end-1c").split(".")[0]) > 400:
-            self.feed.delete("1.0", "150.0")
-        self.feed.see("end")
-        self.feed.configure(state="disabled")
-
-    def _drain(self) -> None:
-        while True:
+    def _drain_logs(self) -> None:
+        while not self._closing:
             try:
-                record = self.records.get_nowait()
+                record = self.records.get(timeout=0.25)
             except queue.Empty:
-                break
-            self._render(record)
-        self.root.after(120, self._drain)
+                continue
+            message = record.getMessage()
+            self._write(message, tag_for(message, record.levelno))
 
-    def _render(self, record: logging.LogRecord) -> None:
-        msg = record.getMessage()
-        stamp = "{:%H:%M:%S}".format(
-            __import__("datetime").datetime.fromtimestamp(record.created))
+    # -- opening state ------------------------------------------------------
+    def opening_state(self) -> dict:
+        """Everything the page needs to draw itself, in one answer.
 
-        if record.levelno >= logging.ERROR:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "bad")
-        elif record.levelno >= logging.WARNING:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "warn")
-        elif "Pressed" in msg:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "ok")
-        elif "DRY RUN" in msg:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "accent")
-        elif "Transcribed" in msg or "Captured" in msg:
-            self._write("{s}  {m}".format(s=stamp, m=msg))
-        elif "Below confidence" in msg or "Declined" in msg:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "warn")
-        elif "Ready" in msg:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "ok")
-        else:
-            self._write("{s}  {m}".format(s=stamp, m=msg), "muted")
+        One call rather than a stream of pushes, so the panel is never
+        briefly visible with English labels or a stale threshold.
+        """
+        with self._lock:
+            entries, self._pending = self._pending, []
+            self._ready.set()
+        return {
+            "version": _running_version(),
+            "phrases": self.phrases(),
+            "languages": sorted(i18n.available().items()),
+            "language": i18n.current(),
+            "dry": bool(self.cfg.behaviour.dry_run),
+            "confidence": float(self.cfg.behaviour.min_confidence),
+            "status": {"text": t(self._status_key),
+                       "state": STATUS_STATES[self._status_key]},
+            "button": t(self._button_key),
+            "subtitle": self._subtitle,
+            "entries": entries,
+        }
+
+    def phrases(self) -> dict[str, str]:
+        return {key: t(key) for key in self._keys}
+
+    # -- language ----------------------------------------------------------
+    def _set_status(self, key: str) -> None:
+        self._status_key = key
+        self._push("status", t(key), STATUS_STATES[key])
+
+    def _set_button(self, key: str, enabled: bool = True) -> None:
+        self._button_key, self._button_enabled = key, enabled
+        self._push("button", t(key), enabled)
+
+    def set_language(self, code: str) -> None:
+        i18n.set_language(code)
+        self.cfg.ui.language = i18n.current()
+        self._retranslate()
+        self._write(t("feed.language_changed",
+                      name=i18n.available().get(i18n.current(), code)), "accent")
+
+    def _retranslate(self) -> None:
+        """Re-label everything in place.
+
+        The activity feed is left as it stands: those lines are a record of
+        what happened, and rewriting history in a new language would be a
+        strange thing for a log to do. New entries arrive translated.
+        """
+        self._push("phrases", self.phrases())
+        self._set_status(self._status_key)
+        self._set_button(self._button_key, self._button_enabled)
+        if self.bridge is not None:
+            self._describe_bridge()
+        if self._update_version:
+            self._push("update", t("update.banner", new=self._update_version,
+                                   old=_running_version()))
 
     # -- update notice ------------------------------------------------------
     def _check_for_updates(self) -> None:
@@ -243,7 +332,7 @@ class App:
 
             newer = update.check()
             if newer:
-                self.root.after(0, lambda: self._show_update(newer))
+                self._show_update(newer)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -251,16 +340,12 @@ class App:
         from . import update
 
         self._update_version = version
-        self.update_banner.configure(
-            text=t("update.banner", new=version, old=_running_version()))
-        # Under the status line, above everything else, so it is the first
-        # thing read - and it was never packed before now, so a current copy
-        # never gives up a pixel to it.
-        self.update_banner.pack(fill="x", after=self.subtitle)
+        self._push("update", t("update.banner", new=version,
+                               old=_running_version()))
         self._write(t("update.feed", new=version, old=_running_version(),
                       url=update.RELEASES_URL), "ok")
 
-    def _open_repository(self) -> None:
+    def open_repository(self) -> None:
         import webbrowser
 
         from . import update
@@ -286,64 +371,24 @@ class App:
             scan = _Scan(self.ui)
             scan.start()
             try:
-                actions = scan.result()
-                error = None
+                actions, error = scan.result(), None
             except Exception as exc:
                 actions, error = [], exc
-            self.root.after(0, lambda: then(actions, error))
+            then(actions, error)
 
         threading.Thread(target=work, daemon=True).start()
 
-    # -- language ----------------------------------------------------------
-    def _set_status(self, key: str, colour: str) -> None:
-        """Remember which phrase is showing, so it can be redrawn."""
-        self._status_key, self._status_colour = key, colour
-        self.status.configure(text=t(key), fg=colour)
-
-    def _sync_language(self, chosen: str) -> None:
-        for code, name in i18n.available().items():
-            if name == chosen:
-                i18n.set_language(code)
-                self.cfg.ui.language = code
-                break
-        self._retranslate()
-        self._write(t("feed.language_changed", name=chosen), "accent")
-
-    def _retranslate(self) -> None:
-        """Re-label everything in place.
-
-        The activity feed is left as it stands: those lines are a record of
-        what happened, and rewriting history in a new language would be a
-        strange thing for a log to do. New entries arrive translated.
-        """
-        self.status.configure(text=t(self._status_key), fg=self._status_colour)
-        self.btn.configure(text=t("button.stop") if self.bridge is not None
-                           else t("button.start"))
-        self.dry_check.configure(text=t("control.dry_run"))
-        self.conf_label.configure(text=t("control.confidence"))
-        self.lang_label.configure(text=t("control.language"))
-        self.test_label.configure(text=t("test.prompt"))
-        self.match_btn.configure(text=t("test.match"))
-        self.activity_label.configure(text=t("pane.activity"))
-        if self.bridge is not None:
-            self._describe_bridge()
-        if self._update_version:
-            self.update_banner.configure(text=t(
-                "update.banner", new=self._update_version,
-                old=_running_version()))
-
     # -- controls ----------------------------------------------------------
-    def _sync_dry(self) -> None:
-        self.cfg.behaviour.dry_run = bool(self.dry.get())
+    def set_dry(self, on: bool) -> None:
+        self.cfg.behaviour.dry_run = on
         if self.bridge is not None:
-            self.bridge.cfg.behaviour.dry_run = self.cfg.behaviour.dry_run
-        self._write(t("feed.dry_run", state=t("feed.dry_on")
-                      if self.cfg.behaviour.dry_run else t("feed.dry_off")),
+            self.bridge.cfg.behaviour.dry_run = on
+        self._write(t("feed.dry_run",
+                      state=t("feed.dry_on") if on else t("feed.dry_off")),
                     "accent")
 
-    def _sync_threshold(self, _value=None) -> None:
-        value = round(float(self.thresh.get()), 2)
-        self.thresh_lbl.configure(text="{:.2f}".format(value))
+    def set_threshold(self, value: float) -> None:
+        value = round(value, 2)
         self.cfg.behaviour.min_confidence = value
         if self.bridge is not None:
             self.bridge.cfg.behaviour.min_confidence = value
@@ -351,8 +396,8 @@ class App:
             if hasattr(router, "min_confidence"):
                 router.min_confidence = value
 
-    def _try_phrase(self) -> None:
-        said = self.entry.get().strip()
+    def try_phrase(self, said: str) -> None:
+        said = said.strip()
         if not said:
             return
         self._write(t("feed.typed", said=said), "accent")
@@ -389,15 +434,15 @@ class App:
                     actions[decision.action_index].name), "ok")
 
     # -- bridge lifecycle --------------------------------------------------
-    def _toggle(self) -> None:
+    def toggle(self) -> None:
         if self.bridge is None:
             self._start()
         else:
             self._stop()
 
     def _start(self) -> None:
-        self.btn.configure(state="disabled", text=t("button.starting"))
-        self._set_status("status.loading", WARN)
+        self._set_button("button.starting", enabled=False)
+        self._set_status("status.loading")
         self._write(t("feed.loading_model"), "muted")
         threading.Thread(target=self._start_worker, daemon=True).start()
 
@@ -410,7 +455,7 @@ class App:
             ptt = PushToTalk(self.cfg.audio, on_talk_start=bridge.prescan)
             ptt.start()
             self.bridge, self.ptt = bridge, ptt
-            self.root.after(0, self._started)
+            self._started()
             for captured_at, clip in ptt.clips():
                 try:
                     bridge.handle(clip, captured_at)
@@ -418,45 +463,68 @@ class App:
                     log.exception("Failed to handle an utterance; continuing.")
         except Exception as exc:
             log.error("Could not start: %s", exc)
-            self.root.after(0, self._start_failed)
+            self._start_failed()
 
     def _started(self) -> None:
-        self._set_status("status.listening", OK)
+        self._set_status("status.listening")
         self._describe_bridge()
-        self.btn.configure(state="normal", text=t("button.stop"))
+        self._set_button("button.stop")
 
     def _describe_bridge(self) -> None:
         """The subtitle line, rebuilt - it is also what a language change
         has to redraw, so it lives on its own."""
         device = getattr(getattr(self.bridge, "stt", None), "_device", "?")
-        self.subtitle.configure(text=t(
-            "subtitle.ready", key=self.cfg.audio.ptt_key,
-            model=self.cfg.stt.model, dev=device,
-            backend=self.cfg.intent.backend))
+        self._subtitle = t("subtitle.ready", key=self.cfg.audio.ptt_key,
+                           model=self.cfg.stt.model, dev=device,
+                           backend=self.cfg.intent.backend)
+        self._push("subtitle", self._subtitle)
 
     def _start_failed(self) -> None:
-        self._set_status("status.failed", BAD)
-        self.btn.configure(state="normal", text=t("button.start"))
         self.bridge = None
+        self._set_status("status.failed")
+        self._set_button("button.start")
 
     def _stop(self) -> None:
         if self.ptt is not None:
             self.ptt.stop()
         self.bridge, self.ptt = None, None
-        self._set_status("status.stopped", MUTED)
-        self.subtitle.configure(text="")
-        self.btn.configure(text=t("button.start"))
+        self._set_status("status.stopped")
+        self._subtitle = ""
+        self._push("subtitle", "")
+        self._set_button("button.start")
         self._write(t("feed.stopped"), "muted")
 
-    def _on_close(self) -> None:
+    def _on_closed(self) -> None:
+        self._closing = True
         if self.ptt is not None:
             self.ptt.stop()
-        self.root.destroy()
+        # Let the pump out of its wait, whichever side of boot it is on.
+        self._ready.set()
+        self._outbox.put((None, ()))
 
+    # -- running -----------------------------------------------------------
     def run(self) -> int:
+        self._attach_logging()
         self._write(t("feed.welcome", key=self.cfg.audio.ptt_key), "muted")
         self._write(t("feed.welcome_typed"), "muted")
-        self.root.mainloop()
+
+        self.window = webview.create_window(
+            "SLCVoiceAI",
+            str(WEB / "index.html"),
+            js_api=Api(self),
+            width=580,
+            height=760,
+            min_size=(430, 480),
+            on_top=True,
+            background_color="#11161c",
+        )
+        self.window.events.closed += self._on_closed
+
+        for worker in (self._pump, self._drain_logs):
+            threading.Thread(target=worker, daemon=True).start()
+        self._check_for_updates()
+
+        webview.start()
         return 0
 
 

@@ -153,6 +153,7 @@ Caching the UIA tree, which looks like the obvious next step, is a dead end —
 - A CUDA GPU is strongly recommended for Whisper. CPU works but adds seconds to every command.
 - Whisper's model is chosen automatically to fit the VRAM you have left — see below.
 - **No API key needed** on the default offline backend — see below.
+- The control panel draws its window with the **WebView2 runtime**, which is part of Windows 10 and 11 already; nothing here bundles a browser. If a stripped-down install does not have it, Microsoft's [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/) is a free download, and running headless does not need it at all.
 
 ## Install
 
@@ -365,7 +366,8 @@ slcvoiceai/
   hardware.py   VRAM detection and model selection
   vocabulary.py Whisper hint list
   gemini.py     Gemini fallback matcher
-  gui.py        tkinter control panel (--gui)
+  gui.py        control panel (--gui): decides, and drives the page
+  web/          the panel's markup, stylesheet and script - layout only
   i18n.py       panel wording, English and Polish
   aliases.py    synonym table for aviation phraseology
   update.py     notice when GitHub has a newer version
@@ -386,6 +388,7 @@ tests/
   test_flight_guard.py the six buttons that would end the flight
   test_update.py    version comparison, and failing quietly offline
   test_i18n.py      translations stay complete and keep their placeholders
+  test_panel.py     what an activity line means, and the Python/page seam
   test_bump_version.py  the version never moves backwards
   test_config_keys.py  API keys: resolved, masked, never committed
 ```

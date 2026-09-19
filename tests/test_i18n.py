@@ -138,6 +138,24 @@ def test_every_phrase_the_panel_asks_for_exists():
     assert not missing, "the panel asks for phrases nobody wrote: " + str(missing)
 
 
+def test_every_phrase_the_page_asks_for_exists():
+    """The other half of the panel.
+
+    Since the rewrite, the static labels live in the markup as data-i18n
+    keys rather than as t() calls, so scanning gui.py alone would no longer
+    see them. Same failure this guards against: a heading rendering as
+    `card.controls` in front of a pilot.
+    """
+    from slcvoiceai.gui import phrase_keys
+
+    markup = (ROOT / "slcvoiceai" / "web" / "index.html").read_text(
+        encoding="utf-8")
+    asked = set(phrase_keys(markup))
+    assert asked, "the page asks for no phrases - did the attributes change?"
+    missing = sorted(asked - set(i18n.TRANSLATIONS["en"]))
+    assert not missing, "the page asks for phrases nobody wrote: " + str(missing)
+
+
 def test_the_log_is_not_translated():
     """Deliberate. The panel colours entries by matching on them,
     tools/replay_log.py parses them, and every log already sent to someone

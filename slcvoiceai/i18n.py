@@ -39,23 +39,32 @@ LANGUAGES = {
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
-        # -- status line
-        "status.stopped": "●  stopped",
-        "status.loading": "●  loading Whisper",
-        "status.listening": "●  listening",
-        "status.failed": "●  failed to start",
+        # -- status line. The panel draws the indicator itself, so these
+        # are the words alone.
+        "status.stopped": "Stopped",
+        "status.loading": "Loading Whisper",
+        "status.listening": "Listening",
+        "status.failed": "Failed to start",
         "button.start": "Start listening",
         "button.starting": "Starting...",
         "button.stop": "Stop",
         "subtitle.ready": ("hold {key} and speak   ·   whisper {model} on "
                            "{dev}   ·   {backend}"),
+        # -- card headings. Shown in small capitals by the stylesheet, so
+        # write them as ordinary words.
+        "card.status": "Status",
+        "card.controls": "Controls",
+        "card.test": "Test without a microphone",
+        "pane.activity": "Activity",
         # -- controls
         "control.dry_run": "Dry run (decide, never press)",
         "control.confidence": "min confidence",
         "control.language": "language",
-        "test.prompt": "Try a phrase without speaking:",
+        # The example stays in English in every language: it is what you
+        # would say to SLC, and SLC's buttons are English.
+        "test.placeholder": "e.g. cabin crew, prepare for landing",
         "test.match": "Match",
-        "pane.activity": "ACTIVITY",
+        "feed.clear": "Clear",
         # -- feed
         "feed.welcome": ("SLCVoiceAI ready. Start SLC, get into a flight, "
                          "then press and hold {key} to speak."),
@@ -74,26 +83,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.below_floor": "below floor",
         "feed.language_changed": "-- interface language: {name}",
         # -- updates
-        "update.banner": ("↑  SLCVoiceAI {new} is available  (you have "
-                          "{old})  -  click to open GitHub"),
+        "update.banner": "SLCVoiceAI {new} is available - you have {old}",
+        "update.open": "open GitHub",
         "update.feed": "-- version {new} is on GitHub; this is {old}  ({url})",
     },
     "pl": {
-        "status.stopped": "●  zatrzymany",
-        "status.loading": "●  wczytywanie Whispera",
-        "status.listening": "●  nasłuchuje",
-        "status.failed": "●  nie udało się uruchomić",
+        "status.stopped": "Zatrzymany",
+        "status.loading": "Wczytywanie Whispera",
+        "status.listening": "Nasłuchuje",
+        "status.failed": "Nie udało się uruchomić",
         "button.start": "Zacznij nasłuchiwać",
         "button.starting": "Uruchamianie...",
         "button.stop": "Zatrzymaj",
         "subtitle.ready": ("przytrzymaj {key} i mów   ·   whisper {model} na "
                            "{dev}   ·   {backend}"),
+        "card.status": "Stan",
+        "card.controls": "Sterowanie",
+        "card.test": "Test bez mikrofonu",
+        "pane.activity": "Przebieg",
         "control.dry_run": "Próba (decyduj, nic nie wciskaj)",
         "control.confidence": "min. pewność",
         "control.language": "język",
-        "test.prompt": "Sprawdź frazę bez mówienia:",
+        "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
-        "pane.activity": "PRZEBIEG",
+        "feed.clear": "Wyczyść",
         "feed.welcome": ("SLCVoiceAI gotowy. Uruchom SLC, wejdź w lot, "
                          "a potem przytrzymaj {key} i mów."),
         "feed.welcome_typed": ("Możesz też wpisać frazę powyżej, żeby "
@@ -110,8 +123,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.pass": "PRZECHODZI",
         "feed.below_floor": "poniżej progu",
         "feed.language_changed": "-- język interfejsu: {name}",
-        "update.banner": ("↑  SLCVoiceAI {new} jest dostępny  (masz {old})"
-                          "  -  kliknij, aby otworzyć GitHuba"),
+        "update.banner": "SLCVoiceAI {new} jest dostępny - masz {old}",
+        "update.open": "otwórz GitHuba",
         "update.feed": "-- wersja {new} jest na GitHubie; ta to {old}  ({url})",
     },
 }

@@ -1,0 +1,332 @@
+/* The panel's looks.
+ *
+ * The palette is the one the tkinter panel used, kept deliberately: it was
+ * chosen to sit beside a night cockpit without glowing, and changing it
+ * would have made "does the rewrite look right" and "do I like the new
+ * colours" the same question. What is new is the structure - cards with
+ * headings, a real type scale, and a feed that marks each entry with a
+ * colour stripe instead of tinting the whole line.
+ */
+
+:root {
+  --bg: #11161c;          /* was BG    */
+  --fg: #d6dde5;          /* was FG    */
+  --muted: #7c8899;       /* was MUTED */
+  --accent: #4fa3ff;      /* was ACCENT*/
+  --ok: #4ec46e;          /* was OK    */
+  --warn: #e0a63c;        /* was WARN  */
+  --bad: #e0604c;         /* was BAD   */
+
+  --card: #171e27;
+  --card-line: #232d3a;
+  --sunken: #0d1218;
+
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 var(--ui);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* A control panel is not a document: stray text selection while
+     clicking around is noise. The feed and the test box opt back in. */
+  user-select: none;
+  cursor: default;
+}
+
+/* ---------- title bar ---------- */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #19212b, #141b23);
+  border-bottom: 1px solid var(--card-line);
+  flex-shrink: 0;
+}
+.mark {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  background: rgba(79, 163, 255, .14);
+  border: 1px solid rgba(79, 163, 255, .32);
+}
+.mark svg { width: 13px; height: 13px; fill: var(--accent); }
+.wordmark { font-size: 13px; font-weight: 650; letter-spacing: .2px; }
+.version {
+  margin-left: auto;
+  font: 10px var(--mono);
+  color: var(--muted);
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid var(--card-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* ---------- update notice ----------
+   Takes no space at all until there is something to say, so a current
+   copy never gives up a pixel to it. */
+.update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: #16281b;
+  border-bottom: 1px solid #23492c;
+  color: var(--ok);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.update[hidden] { display: none; }
+.update:hover { background: #1a2f20; }
+.update .go { margin-left: auto; opacity: .75; }
+
+/* ---------- scrolling body ---------- */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.body::-webkit-scrollbar { width: 10px; }
+.body::-webkit-scrollbar-thumb {
+  background: #2a3542;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---------- cards ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  padding: 13px 14px;
+  flex-shrink: 0;
+}
+.card h2 {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+/* The hairline that trails off after a heading. */
+.card h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--card-line), transparent);
+}
+
+/* ---------- status ---------- */
+.status-row { display: flex; align-items: center; gap: 11px; }
+.dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background .2s, box-shadow .2s;
+}
+.status-text { font-size: 19px; font-weight: 600; letter-spacing: -.2px; }
+
+.is-listening .dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 4px rgba(78, 196, 110, .15);
+  animation: pulse 2s ease-in-out infinite;
+}
+.is-listening .status-text { color: var(--ok); }
+.is-loading .dot { background: var(--warn); }
+.is-loading .status-text { color: var(--warn); }
+.is-failed .dot { background: var(--bad); }
+.is-failed .status-text { color: var(--bad); }
+
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(78, 196, 110, 0); } }
+
+.subtitle {
+  margin-top: 7px;
+  font: 11px var(--mono);
+  color: var(--muted);
+  min-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 13px;
+  padding: 11px;
+  font: 600 14px var(--ui);
+  color: #07130c;
+  background: var(--ok);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter .15s, transform .05s;
+}
+.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.primary:active:not(:disabled) { transform: translateY(1px); }
+.primary:disabled { opacity: .55; cursor: default; }
+.primary .glyph { width: 13px; height: 13px; fill: currentColor; }
+/* Stopping is not the happy path: it should not be the green button. */
+.is-listening .primary { background: #2a3441; color: var(--fg); }
+
+/* ---------- control rows ---------- */
+.row { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.row + .row { margin-top: 3px; }
+.row .label { color: var(--muted); font-size: 12px; }
+.row .spacer { flex: 1; }
+
+.check { cursor: pointer; }
+.check input {
+  width: 15px; height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.slider-row { display: flex; align-items: center; margin-top: 4px; }
+input[type=range] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  background: #2a3542;
+  border-radius: 999px;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.readout {
+  font: 600 13px var(--mono);
+  color: var(--accent);
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+select, .text-input {
+  background: var(--sunken);
+  color: var(--fg);
+  border: 1px solid var(--card-line);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font: 12px var(--ui);
+  outline: none;
+}
+select { cursor: pointer; }
+select:focus, .text-input:focus { border-color: var(--accent); }
+
+/* ---------- typed test ---------- */
+.test-row { display: flex; gap: 7px; }
+.text-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  user-select: text;
+  cursor: text;
+}
+.text-input::placeholder { color: #55606e; }
+.ghost {
+  padding: 0 15px;
+  background: #222c38;
+  color: var(--fg);
+  border: 1px solid var(--card-line);
+  border-radius: 6px;
+  font: 12px var(--ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ghost:hover { background: #2a3542; border-color: #36455a; }
+
+/* ---------- activity feed ---------- */
+.feed-card {
+  flex: 1 1 auto;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+}
+.feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sunken);
+  border: 1px solid #1b242f;
+  border-radius: 7px;
+  padding: 5px 0;
+  font: 11.5px/1.5 var(--mono);
+  user-select: text;
+  cursor: text;
+}
+.feed::-webkit-scrollbar { width: 9px; }
+.feed::-webkit-scrollbar-thumb {
+  background: #2a3542;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.entry {
+  display: flex;
+  gap: 9px;
+  padding: 2px 10px 2px 8px;
+  border-left: 2px solid transparent;
+}
+.entry .time {
+  color: #4c5866;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* Wrapped continuation lines line up under the message, not the clock. */
+.entry .msg { color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+
+.entry.ok     { border-left-color: var(--ok); }
+.entry.ok     .msg { color: var(--ok); }
+.entry.accent { border-left-color: var(--accent); }
+.entry.accent .msg { color: var(--accent); }
+.entry.warn   { border-left-color: var(--warn); }
+.entry.warn   .msg { color: var(--warn); }
+.entry.bad    { border-left-color: var(--bad); }
+.entry.bad    .msg { color: var(--bad); }
+.entry.plain  .msg { color: var(--fg); }
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.icon-btn:hover { color: var(--fg); background: rgba(255, 255, 255, .06); }
+/* A button inside a heading sits past the hairline, not before it: the
+   ::after is a later flex item than the button in DOM order, so the
+   button has to be moved rather than the rule. */
+.card h2 .icon-btn { order: 1; }

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SLCVoiceAI</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<!--
+  Every user-visible word here carries a data-i18n* attribute rather than
+  a sentence. gui.py reads this file, collects those keys, and hands the
+  page a phrase for each one in the pilot's language; switching language
+  re-sends the same dictionary. Nothing in this file is translated, which
+  is what makes adding a language a matter of editing i18n.py alone.
+
+  The activity feed is the deliberate exception - see panel.js.
+-->
+
+<header class="titlebar">
+  <span class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+  </span>
+  <span class="wordmark">SLCVoiceAI</span>
+  <span class="version" id="version"></span>
+</header>
+
+<div class="update" id="update" hidden>
+  <span aria-hidden="true">&#8593;</span>
+  <span id="update-text"></span>
+  <span class="go" data-i18n="update.open"></span>
+</div>
+
+<main class="body">
+
+  <section class="card" id="status-card">
+    <h2 data-i18n="card.status"></h2>
+    <div class="status-row">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="status-text" id="status-text"></span>
+    </div>
+    <div class="subtitle" id="subtitle"></div>
+    <button class="primary" id="toggle">
+      <svg class="glyph" id="toggle-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <span id="toggle-text"></span>
+    </button>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="card.controls"></h2>
+
+    <label class="row check">
+      <input type="checkbox" id="dry">
+      <span data-i18n="control.dry_run"></span>
+    </label>
+
+    <div class="row">
+      <span class="label" data-i18n="control.confidence"></span>
+      <span class="spacer"></span>
+      <span class="readout" id="conf-out"></span>
+    </div>
+    <div class="slider-row">
+      <input type="range" id="conf" min="0.30" max="0.95" step="0.01">
+    </div>
+
+    <div class="row">
+      <span class="label" data-i18n="control.language"></span>
+      <span class="spacer"></span>
+      <select id="lang"></select>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="card.test"></h2>
+    <div class="test-row">
+      <input class="text-input" id="phrase" autocomplete="off" spellcheck="false"
+             data-i18n-placeholder="test.placeholder">
+      <button class="ghost" id="match" data-i18n="test.match"></button>
+    </div>
+  </section>
+
+  <section class="card feed-card">
+    <h2>
+      <span data-i18n="pane.activity"></span>
+      <button class="icon-btn" id="clear" data-i18n-title="feed.clear">&#9003;</button>
+    </h2>
+    <div class="feed" id="feed"></div>
+  </section>
+
+</main>
+
+<script src="panel.js"></script>
+</body>
+</html>
