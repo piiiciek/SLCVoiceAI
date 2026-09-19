@@ -64,6 +64,10 @@ STATUS_STATES = {
     "status.failed": "failed",
 }
 
+#: How to spell the cloud matchers when naming one to the pilot. The
+#: config takes them lowercase; nobody writes "gemini" in a sentence.
+AI_NAMES = {"gemini": "Gemini", "claude": "Claude"}
+
 _I18N_ATTR = re.compile(r'data-i18n(?:-[a-z-]+)?="([^"]+)"')
 _I18N_SAY = re.compile(r'\bsay\(\s*"([a-z][a-z0-9_.]+)"\s*\)')
 
@@ -306,7 +310,22 @@ class App:
         }
 
     def phrases(self) -> dict[str, str]:
-        return {key: t(key) for key in self._keys}
+        said = {key: t(key) for key in self._keys}
+        if "control.hint" in said:
+            said["control.hint"] = self._confidence_hint()
+        return said
+
+    def _confidence_hint(self) -> str:
+        """What raising the floor actually does, which depends on setup.
+
+        With an escalation backend configured, a match below the floor is
+        handed to it by name. Without one there is nobody to ask, so the
+        sentence must not promise that anything is - it simply declines.
+        """
+        helper = self.cfg.intent.escalate_to.strip().lower()
+        if helper in ("", "none"):
+            return t("control.hint_alone")
+        return t("control.hint", ai=AI_NAMES.get(helper, helper.title()))
 
     # -- language ----------------------------------------------------------
     def _set_status(self, key: str) -> None:

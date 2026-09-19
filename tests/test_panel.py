@@ -127,6 +127,42 @@ def test_every_label_on_the_page_has_a_phrase(code):
         i18n.set_language("en")
 
 
+@pytest.mark.parametrize("escalate_to, expected", [
+    ("gemini", "Gemini"),
+    ("claude", "Claude"),
+])
+def test_the_floor_names_whoever_is_actually_asked(escalate_to, expected):
+    from slcvoiceai import config as config_module
+
+    cfg = config_module.Config()
+    cfg.intent.escalate_to = escalate_to
+    assert expected in gui.App(cfg)._confidence_hint()
+
+
+@pytest.mark.parametrize("escalate_to", ["none", "", "  "])
+def test_with_nobody_to_ask_it_does_not_promise_anything(escalate_to):
+    """A copy running purely offline has no cloud matcher. Telling its
+    pilot that raising the floor means "asks Gemini" would be a lie."""
+    from slcvoiceai import config as config_module
+
+    cfg = config_module.Config()
+    cfg.intent.escalate_to = escalate_to
+    hint = gui.App(cfg)._confidence_hint()
+    for name in gui.AI_NAMES.values():
+        assert name not in hint, hint
+    assert hint.strip(), "it says nothing at all"
+
+
+def test_the_hint_the_page_gets_is_the_one_for_this_setup():
+    """phrases() is what the page is sent, so the substitution has to
+    survive that trip - and a language change re-sends it."""
+    from slcvoiceai import config as config_module
+
+    cfg = config_module.Config()
+    cfg.intent.escalate_to = "gemini"
+    assert "Gemini" in gui.App(cfg).phrases()["control.hint"]
+
+
 def test_every_status_has_a_look():
     """A status with no entry here would raise a KeyError on the line that
     reports it - which is exactly when the panel must not fail."""

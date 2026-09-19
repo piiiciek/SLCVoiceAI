@@ -72,10 +72,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # -- controls
         "control.dry_run": "Dry run (decide, never press)",
         "control.confidence": "min confidence",
-        "control.hint": ("The lower the slider, the more often it presses on "
-                         "its own - quicker, but likelier to get one wrong. "
-                         "The higher, the more often it checks again or does "
-                         "nothing - slower, but surer."),
+        # Two versions, because the second half is only true when a cloud
+        # matcher is configured to be asked. {ai} is whichever one that is.
+        "control.hint": ("The lower the slider, the more often the program "
+                         "presses on its own - quicker, but likelier to get "
+                         "one wrong. The higher, the more often it asks {ai} "
+                         "or does nothing - slower, but surer."),
+        "control.hint_alone": ("The lower the slider, the more often the "
+                               "program presses on its own - quicker, but "
+                               "likelier to get one wrong. The higher, the "
+                               "more often it does nothing - slower, but "
+                               "surer."),
         "control.language": "language",
         # The example stays in English in every language: it is what you
         # would say to SLC, and SLC's buttons are English.
@@ -138,8 +145,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "control.confidence": "min. pewność",
         "control.hint": ("Im niżej suwak, tym częściej program wciska sam — "
                          "szybciej, ale łatwiej o pomyłkę. Im wyżej, tym "
-                         "częściej dopytuje albo nie robi nic — wolniej, ale "
-                         "pewniej."),
+                         "częściej dopytuje AI {ai} albo nie robi nic — "
+                         "wolniej, ale pewniej."),
+        "control.hint_alone": ("Im niżej suwak, tym częściej program wciska "
+                               "sam — szybciej, ale łatwiej o pomyłkę. Im "
+                               "wyżej, tym częściej nie robi nic — wolniej, "
+                               "ale pewniej."),
         "control.language": "język",
         "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
