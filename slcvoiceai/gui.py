@@ -304,6 +304,9 @@ class App:
         self._retranslate()
         self._write(t("feed.language_changed",
                       name=i18n.available().get(i18n.current(), code)), "accent")
+        # The resolved code, not what was asked for: picking a language the
+        # panel does not speak must not write that into the file.
+        self._remember("ui", "language", i18n.current())
 
     def _retranslate(self) -> None:
         """Re-label everything in place.
@@ -379,6 +382,28 @@ class App:
         threading.Thread(target=work, daemon=True).start()
 
     # -- controls ----------------------------------------------------------
+    def _remember(self, section: str, key: str, value) -> None:
+        """Write a setting back to the config.toml it was loaded from.
+
+        A control that forgets what you set it to the moment the window
+        closes is worse than no control, so this runs on every change
+        rather than at shutdown - a panel killed mid-flight still keeps
+        the tuning that was done during it.
+
+        Failing to save must never take the panel down, but it must not
+        be silent either: the pilot would go on believing the setting had
+        stuck.
+        """
+        from . import config as config_module
+
+        if self.cfg.source is None:
+            return          # nothing was loaded from disk; nothing to write
+        try:
+            config_module.save_settings(self.cfg.source, {section: {key: value}})
+        except Exception as exc:
+            log.debug("Could not save %s.%s", section, key, exc_info=True)
+            self._write(t("feed.save_failed", error=exc), "warn")
+
     def set_dry(self, on: bool) -> None:
         self.cfg.behaviour.dry_run = on
         if self.bridge is not None:
@@ -386,6 +411,7 @@ class App:
         self._write(t("feed.dry_run",
                       state=t("feed.dry_on") if on else t("feed.dry_off")),
                     "accent")
+        self._remember("behaviour", "dry_run", on)
 
     def set_threshold(self, value: float) -> None:
         value = round(value, 2)
@@ -395,6 +421,7 @@ class App:
             router = getattr(self.bridge, "router", None)
             if hasattr(router, "min_confidence"):
                 router.min_confidence = value
+        self._remember("behaviour", "min_confidence", value)
 
     def try_phrase(self, said: str) -> None:
         said = said.strip()

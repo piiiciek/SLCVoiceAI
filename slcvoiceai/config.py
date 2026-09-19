@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
+import tempfile
+import threading
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -133,6 +136,11 @@ class Config:
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
     ui: UiConfig = field(default_factory=UiConfig)
 
+    #: Where this was loaded from, so the panel can write a setting back to
+    #: the same file. None when nobody loaded it from disk, which is what
+    #: stops tests and headless defaults writing anything.
+    source: Path | None = field(default=None, compare=False)
+
     @property
     def needs_api_key(self) -> bool:
         return "claude" in (self.intent.backend, self.intent.escalate_to)
@@ -235,4 +243,102 @@ def load(path: str | Path = "config.toml") -> Config:
                     section=section, path=path, keys=", ".join(sorted(unknown)))
             )
         kwargs[section] = cls(**values)
-    return Config(**kwargs)
+    return Config(source=path, **kwargs)
+
+
+# --------------------------------------------------------------------------
+# Writing one setting back
+# --------------------------------------------------------------------------
+#
+# The panel changes three things - the confidence floor, dry run and the
+# interface language - and until now they lasted until the window closed,
+# which is a confusing thing for a control to do.
+#
+# Nothing here serialises a Config. It patches the individual lines it was
+# asked about and leaves every other byte of the file alone. That is not
+# tidiness, it is the safety property: config.toml holds the API key, and
+# a key can also come from an environment variable, where `cfg.api_key`
+# resolves to a value that must never be written to disk. A whole-file
+# dump would do exactly that, and would throw away the comments that
+# explain every setting. A line patcher cannot.
+
+
+def _as_toml(value) -> str:
+    """One value, as TOML spells it."""
+    if isinstance(value, bool):        # before int: bool is an int
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return repr(value)
+    if isinstance(value, float):
+        text = format(value, "g")
+        # TOML reads 1 as an integer, which would quietly change the type
+        # of a float setting the next time it is loaded.
+        return text if ("." in text or "e" in text) else text + ".0"
+    return '"{v}"'.format(v=str(value).replace("\\", "\\\\").replace('"', '\\"'))
+
+
+def _patch(text: str, section: str, key: str, value: str) -> str:
+    """Set one key inside one section, touching nothing else."""
+    lines = text.splitlines()
+    header = re.compile(r"^\s*\[" + re.escape(section) + r"\]\s*$")
+    assignment = re.compile(
+        r"^(\s*" + re.escape(key) + r"\s*=\s*)(.*?)(\s*#.*)?$")
+
+    at = next((i for i, line in enumerate(lines) if header.match(line)), None)
+    if at is None:
+        blank = [""] if lines else []
+        lines += blank + ["[{s}]".format(s=section),
+                          "{k} = {v}".format(k=key, v=value)]
+        return "\n".join(lines) + "\n"
+
+    for i in range(at + 1, len(lines)):
+        if lines[i].lstrip().startswith("["):
+            break                        # the next section began
+        found = assignment.match(lines[i])
+        if found:
+            lines[i] = found.group(1) + value + (found.group(3) or "")
+            return "\n".join(lines) + "\n"
+
+    # The section is there but says nothing about this key.
+    lines.insert(at + 1, "{k} = {v}".format(k=key, v=value))
+    return "\n".join(lines) + "\n"
+
+
+#: Read-modify-write is not atomic, and the panel's controls arrive on
+#: whatever thread pywebview dispatches them on. Without this, two settings
+#: changed in quick succession both read the old file and the second write
+#: silently threw the first away - which is exactly what happened the first
+#: time this was tried end to end.
+_SAVE_LOCK = threading.Lock()
+
+
+def save_settings(path: str | Path, changes: dict[str, dict]) -> None:
+    """Write settings back, as {section: {key: value}}.
+
+    Replaced through a temporary file in the same directory, so a crash
+    mid-write cannot leave a half-written config.toml behind - it holds
+    the API key, and losing it to a truncated file would be a bad day.
+    """
+    path = Path(path)
+    with _SAVE_LOCK:
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        for section, values in changes.items():
+            for key, value in values.items():
+                text = _patch(text, section, key, _as_toml(value))
+
+        # A unique name, not <file>.tmp. The lock keeps this process
+        # honest, but two panels open at once would otherwise write the
+        # same temporary file and hand each other half of it - which does
+        # not lose a setting, it corrupts config.toml. Worth the extra
+        # line, given what that file holds.
+        handle, temporary = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+        os.close(handle)
+        try:
+            Path(temporary).write_text(text, encoding="utf-8")
+            os.replace(temporary, path)
+        except BaseException:
+            # Never leave a stray half-written config beside the real one.
+            with contextlib.suppress(OSError):
+                os.unlink(temporary)
+            raise
