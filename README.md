@@ -305,6 +305,13 @@ delete = "GROUND CREW"     # call the ground crew (the MECH button)
 home   = "P A SYSTEM"      # announcement to the passengers
 ```
 
+Or set them in the panel, which is easier: the **Keys bound to SLC buttons**
+card lists what is bound, and clicking a key and pressing a new one rebinds it.
+Every change is written straight back to `config.toml` and takes effect at once
+— nothing needs restarting. The ↻ next to the card reads SLC and offers what it
+is showing right now as you type, so a binding does not end up pointing at a
+button name misremembered.
+
 Any key on the left, any SLC button on the right. Nothing is bound by default.
 `"INTERCOM"` finds the button SLC shows as `INTERCOM >`, and case does not
 matter — but a name that fits **more than one** button presses nothing rather

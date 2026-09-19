@@ -41,6 +41,9 @@
     document.querySelectorAll("[data-i18n-title]").forEach(function (el) {
       el.title = say(el.dataset.i18nTitle);
     });
+    // The hotkey rows are built in script, so they carry no data-i18n for
+    // the sweep above to find - their wording has to be drawn again.
+    render();
   }
 
   /* ---------- the surface gui.py drives ------------------------------- */
@@ -107,6 +110,22 @@
     update: function (text) {
       $("update-text").textContent = text;
       $("update").hidden = false;
+    },
+
+    /** rows is [{key, buttons}], exactly as gui.py accepted them. */
+    hotkeys: function (rows) {
+        drawHotkeys(rows || []);
+    },
+
+    /** Button names read out of SLC, offered as you type. */
+    suggestions: function (names) {
+      var list = $("slc-buttons");
+      list.textContent = "";
+      (names || []).forEach(function (name) {
+        var option = document.createElement("option");
+        option.value = name;
+        list.appendChild(option);
+      });
     },
 
     controls: function (state) {
@@ -192,6 +211,134 @@
     ask("open_repository");
   });
 
+  /* ---------- hotkeys ---------------------------------------------------
+     The page holds a working copy while it is being edited, then sends the
+     whole list. Python answers with what it accepted and the page redraws
+     from that, so a refused binding cannot linger on screen looking saved. */
+
+  var rows = [];
+  var listening = null;          // the keycap waiting for a key, if any
+
+  function drawHotkeys(fresh) {
+    rows = fresh.map(function (row) {
+      return { key: row.key, buttons: row.buttons };
+    });
+    listening = null;
+    render();
+  }
+
+  function render() {
+    var host = $("hotkeys");
+    host.textContent = "";
+
+    if (!rows.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = say("hotkeys.none");
+      host.appendChild(empty);
+      return;
+    }
+
+    rows.forEach(function (row, index) {
+      var line = document.createElement("div");
+      line.className = "hotkey";
+
+      var cap = document.createElement("button");
+      cap.className = "keycap";
+      cap.textContent = row.key || say("hotkeys.press");
+      cap.addEventListener("click", function () { listenOn(cap, index); });
+
+      var arrow = document.createElement("span");
+      arrow.className = "arrow";
+      arrow.textContent = "→";
+
+      var box = document.createElement("input");
+      box.className = "text-input";
+      box.value = row.buttons;
+      box.placeholder = say("hotkeys.button");
+      box.setAttribute("list", "slc-buttons");
+      box.autocomplete = "off";
+      box.spellcheck = false;
+      box.addEventListener("input", function () { rows[index].buttons = box.value; });
+      box.addEventListener("change", commit);
+
+      var bin = document.createElement("button");
+      bin.className = "icon-btn";
+      bin.textContent = "×";
+      bin.title = say("hotkeys.remove");
+      bin.addEventListener("click", function () {
+        rows.splice(index, 1);
+        render();
+        commit();
+      });
+
+      line.appendChild(cap);
+      line.appendChild(arrow);
+      line.appendChild(box);
+      line.appendChild(bin);
+      host.appendChild(line);
+    });
+  }
+
+  function listenOn(cap, index) {
+    if (listening) listening.cap.classList.remove("listening");
+    listening = { cap: cap, index: index };
+    cap.classList.add("listening");
+    cap.textContent = say("hotkeys.press");
+    cap.focus();
+  }
+
+  // Captured on the window so it works wherever focus happens to be, and
+  // swallowed so binding Tab or Space does not also move focus or scroll.
+  window.addEventListener("keydown", function (event) {
+    if (!listening) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    var at = listening;
+    if (event.code === "Escape") {          // changed your mind
+      at.cap.classList.remove("listening");
+      at.cap.textContent = rows[at.index].key || say("hotkeys.press");
+      listening = null;
+      return;
+    }
+
+    if (!api) return;
+    api.capture_key(event.code).then(function (answer) {
+      at.cap.classList.remove("listening");
+      listening = null;
+      if (answer && answer.key) {
+        rows[at.index].key = answer.key;
+        commit();
+      }
+      at.cap.textContent = rows[at.index] ? (rows[at.index].key
+                                             || say("hotkeys.press")) : "";
+      render();
+    }).catch(function (err) { console.error("capture_key", err); });
+  }, true);
+
+  function commit() {
+    if (!api) return;
+    // A row being filled in - Add pressed, key chosen, button name not
+    // typed yet - is not something Python stores, so it does not come back
+    // in the answer. Carrying it over is what stops a new binding
+    // vanishing from under the pilot halfway through making it.
+    var pending = rows.filter(function (row) { return !row.key || !row.buttons; });
+    api.save_hotkeys(rows).then(function (answer) {
+      if (answer && answer.rows) drawHotkeys(answer.rows.concat(pending));
+    }).catch(function (err) { console.error("save_hotkeys", err); });
+  }
+
+  $("add-hotkey").addEventListener("click", function () {
+    rows.push({ key: "", buttons: "" });
+    render();
+    // Straight into capturing, since an empty row is not worth looking at.
+    var caps = $("hotkeys").querySelectorAll(".keycap");
+    if (caps.length) listenOn(caps[caps.length - 1], rows.length - 1);
+  });
+
+  $("read-slc").addEventListener("click", function () { ask("read_slc_buttons"); });
+
   /* ---------- start ---------------------------------------------------- */
 
   window.addEventListener("pywebviewready", function () {
@@ -204,6 +351,7 @@
       panel.status(state.status.text, state.status.state);
       panel.button(state.button, true);
       panel.subtitle(state.subtitle);
+      panel.hotkeys(state.hotkeys);
       panel.feedMany(state.entries);
     }).catch(function (err) {
       console.error("boot", err);

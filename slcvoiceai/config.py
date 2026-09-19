@@ -299,6 +299,8 @@ def _read_hotkeys(raw: dict, path: Path) -> dict[str, tuple[str, ...]]:
 
 def _as_toml(value) -> str:
     """One value, as TOML spells it."""
+    if isinstance(value, (list, tuple)):
+        return "[{items}]".format(items=", ".join(_as_toml(v) for v in value))
     if isinstance(value, bool):        # before int: bool is an int
         return "true" if value else "false"
     if isinstance(value, int):
@@ -338,6 +340,61 @@ def _patch(text: str, section: str, key: str, value: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+_ASSIGNMENT = re.compile(r"^\s*([A-Za-z0-9_-]+)\s*=")
+
+
+def _replace_section(text: str, section: str, values: dict) -> str:
+    """Rewrite one section's assignments, keeping everything else.
+
+    [hotkeys] is not like the other sections: bindings come and go, so
+    there is no fixed set of lines to patch. What there is instead is a
+    block of comments explaining how to use it, and a trailing note on
+    each binding saying what the key is for - both of which a naive
+    "delete the section and write a new one" would throw away.
+
+    So: comments stay where they are, assignments are replaced wholesale,
+    and a trailing comment is carried over for any key that survives.
+    """
+    lines = text.splitlines()
+    header = re.compile(r"^\s*\[" + re.escape(section) + r"\]\s*$")
+    at = next((i for i, line in enumerate(lines) if header.match(line)), None)
+
+    if at is None:
+        if not values:
+            return text if text.endswith("\n") or not text else text + "\n"
+        blank = [""] if lines else []
+        lines += blank + ["[{s}]".format(s=section)]
+        at = len(lines) - 1
+        end = len(lines)
+    else:
+        end = next((i for i in range(at + 1, len(lines))
+                    if lines[i].lstrip().startswith("[")), len(lines))
+
+    kept, notes = [], {}
+    for line in lines[at + 1:end]:
+        found = _ASSIGNMENT.match(line)
+        if not found:
+            kept.append(line)
+            continue
+        comment = line.split("#", 1)
+        if len(comment) == 2:
+            notes[found.group(1).strip().lower()] = "  #" + comment[1]
+
+    while kept and not kept[-1].strip():        # do not grow a blank run
+        kept.pop()
+
+    written = ["{k} = {v}{note}".format(k=key, v=_as_toml(value),
+                                        note=notes.get(key, ""))
+               for key, value in values.items()]
+
+    # One blank line before whatever section follows. Stripping the run of
+    # blanks above is what keeps the file from growing a gap every time
+    # this runs; this puts a single separator back.
+    gap = [""] if end < len(lines) else []
+
+    return "\n".join(lines[:at + 1] + kept + written + gap + lines[end:]) + "\n"
+
+
 #: Read-modify-write is not atomic, and the panel's controls arrive on
 #: whatever thread pywebview dispatches them on. Without this, two settings
 #: changed in quick succession both read the old file and the second write
@@ -359,20 +416,41 @@ def save_settings(path: str | Path, changes: dict[str, dict]) -> None:
         for section, values in changes.items():
             for key, value in values.items():
                 text = _patch(text, section, key, _as_toml(value))
+        _replace_atomically(path, text)
 
-        # A unique name, not <file>.tmp. The lock keeps this process
-        # honest, but two panels open at once would otherwise write the
-        # same temporary file and hand each other half of it - which does
-        # not lose a setting, it corrupts config.toml. Worth the extra
-        # line, given what that file holds.
-        handle, temporary = tempfile.mkstemp(
-            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
-        os.close(handle)
-        try:
-            Path(temporary).write_text(text, encoding="utf-8")
-            os.replace(temporary, path)
-        except BaseException:
-            # Never leave a stray half-written config beside the real one.
-            with contextlib.suppress(OSError):
-                os.unlink(temporary)
-            raise
+
+def save_hotkeys(path: str | Path, bindings: dict[str, tuple[str, ...]]) -> None:
+    """Write the whole [hotkeys] section, because bindings come and go.
+
+    A one-button binding is written as a plain string rather than a
+    one-item list: config.toml is meant to be read by the person editing
+    it, and `insert = "INTERCOM"` reads better than `["INTERCOM"]`.
+    """
+    path = Path(path)
+    values = {key: (tuple(buttons)[0] if len(buttons) == 1 else tuple(buttons))
+              for key, buttons in bindings.items()}
+    with _SAVE_LOCK:
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        _replace_atomically(path, _replace_section(text, "hotkeys", values))
+
+
+def _replace_atomically(path: Path, text: str) -> None:
+    """Swap the file's contents in one step.
+
+    A unique temporary name, not <file>.tmp. The lock keeps this process
+    honest, but two panels open at once would otherwise write the same
+    temporary file and hand each other half of it - which does not lose a
+    setting, it corrupts config.toml. Worth the extra lines, given what
+    that file holds.
+    """
+    handle, temporary = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    os.close(handle)
+    try:
+        Path(temporary).write_text(text, encoding="utf-8")
+        os.replace(temporary, path)
+    except BaseException:
+        # Never leave a stray half-written config beside the real one.
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        raise

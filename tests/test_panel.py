@@ -148,11 +148,23 @@ def test_the_page_only_looks_for_elements_that_exist():
             "panel.js wants #{e}, which is not in index.html".format(e=element))
 
 
+def methods_the_page_calls() -> set[str]:
+    """Both ways the page reaches Python.
+
+    `ask("name")` is the fire-and-forget helper; `api.name(...)` is a
+    direct call, used where the page needs the answer back. Looking for
+    only one of them made this pair of tests quietly wrong the first time
+    a method returned something.
+    """
+    return (set(re.findall(r'ask\("(\w+)"', SCRIPT))
+            | set(re.findall(r'\bapi\.(\w+)\s*\(', SCRIPT)))
+
+
 def test_the_page_only_calls_methods_python_exposes():
     """Anything the page asks for has to be a public method on Api, or the
     control is dead and the failure is a silent rejected promise."""
-    asked = set(re.findall(r'ask\("(\w+)"', SCRIPT))
-    asked.add("boot")  # called directly, to get the opening state in one go
+    asked = methods_the_page_calls()
+    assert asked, "the page calls nothing - did the helpers get renamed?"
     exposed = {name for name in vars(gui.Api) if not name.startswith("_")}
     missing = sorted(asked - exposed)
     assert not missing, "the page calls Api methods that do not exist: " + str(missing)
@@ -161,11 +173,9 @@ def test_the_page_only_calls_methods_python_exposes():
 def test_everything_api_exposes_is_reachable_from_the_page():
     """The other direction. Api is reachable from JavaScript, so a method
     nobody calls is surface for no reason."""
-    asked = set(re.findall(r'ask\("(\w+)"', SCRIPT)) | {"boot"}
-    exposed = {name for name in vars(gui.Api) if not name.startswith("_")}
-    assert not sorted(exposed - asked), (
-        "Api exposes methods the page never calls: "
-        + str(sorted(exposed - asked)))
+    unused = sorted({name for name in vars(gui.Api) if not name.startswith("_")}
+                    - methods_the_page_calls())
+    assert not unused, "Api exposes methods the page never calls: " + str(unused)
 
 
 def test_the_page_loads_the_files_that_ship_with_it():

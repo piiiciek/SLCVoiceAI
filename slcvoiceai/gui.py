@@ -182,6 +182,18 @@ class Api:
     def open_repository(self) -> None:
         self._app.open_repository()
 
+    @_guard
+    def capture_key(self, code: str) -> dict:
+        return self._app.capture_key(str(code))
+
+    @_guard
+    def save_hotkeys(self, rows: list) -> dict:
+        return self._app.save_hotkeys(rows or [])
+
+    @_guard
+    def read_slc_buttons(self) -> None:
+        self._app.read_slc_buttons()
+
 
 class App:
     def __init__(self, cfg: Config):
@@ -284,6 +296,7 @@ class App:
                        "state": STATUS_STATES[self._status_key]},
             "button": t(self._button_key),
             "subtitle": self._subtitle,
+            "hotkeys": self.hotkey_rows(),
             "entries": entries,
         }
 
@@ -423,6 +436,116 @@ class App:
             if hasattr(router, "min_confidence"):
                 router.min_confidence = value
         self._remember("behaviour", "min_confidence", value)
+
+    # -- hotkeys -----------------------------------------------------------
+    #: What the page shows between the buttons of a sequence, and what it
+    #: sends back. A pipe rather than a comma because SLC really does have
+    #: a button called "GSX, START CATERING".
+    STEP = " | "
+
+    def hotkey_rows(self) -> list[dict]:
+        return [{"key": key, "buttons": self.STEP.join(buttons)}
+                for key, buttons in sorted(self.cfg.hotkeys.items())]
+
+    def capture_key(self, code: str) -> dict:
+        """Translate a key the pilot pressed in the panel into a name.
+
+        The page sends the raw browser code and gets back what config.toml
+        would call it, so nothing in the page has to know about pynput.
+        """
+        from . import keys
+
+        name = keys.from_browser_code(code)
+        if name is None:
+            return {"key": "", "error": t("hotkeys.unusable")}
+        if name == self.cfg.audio.ptt_key.strip().lower():
+            return {"key": "", "error": t("hotkeys.is_ptt", key=name)}
+        return {"key": name, "error": ""}
+
+    def save_hotkeys(self, rows: list) -> dict:
+        """Take the page's whole list, check it, store it, arm it, save it.
+
+        The page sends everything rather than a single edit, so adding,
+        changing and removing are one code path - and the answer carries
+        the accepted list back, which is what stops the page and the
+        bridge ever disagreeing about what is bound.
+        """
+        from . import keys
+
+        bindings: dict[str, tuple[str, ...]] = {}
+        for row in rows:
+            name = str(row.get("key", "")).strip().lower()
+            buttons = tuple(part.strip() for part in
+                            str(row.get("buttons", "")).split("|")
+                            if part.strip())
+            if not name or not buttons:
+                continue                      # a half-filled row, not an error
+            try:
+                keys.parse_key(name, "hotkeys." + name)
+            except ValueError:
+                return self._hotkey_refusal(t("hotkeys.unusable"))
+            if name == self.cfg.audio.ptt_key.strip().lower():
+                return self._hotkey_refusal(t("hotkeys.is_ptt", key=name))
+            if name in bindings:
+                return self._hotkey_refusal(t("hotkeys.duplicate", key=name))
+            bindings[name] = buttons
+
+        self.cfg.hotkeys = bindings
+        self._rearm_hotkeys()
+
+        if self.cfg.source is not None:
+            from . import config as config_module
+            try:
+                config_module.save_hotkeys(self.cfg.source, bindings)
+            except Exception as exc:
+                log.debug("Could not save hotkeys", exc_info=True)
+                self._write(t("feed.save_failed", error=exc), "warn")
+
+        self._write(t("feed.hotkeys", what=self._describe_hotkeys()), "accent")
+        return {"rows": self.hotkey_rows(), "error": ""}
+
+    def _hotkey_refusal(self, message: str) -> dict:
+        """Say why, and hand back what is actually bound."""
+        self._write(message, "warn")
+        return {"rows": self.hotkey_rows(), "error": message}
+
+    def _describe_hotkeys(self) -> str:
+        if not self.cfg.hotkeys:
+            return t("hotkeys.none")
+        return ", ".join("{k} -> {b}".format(k=key, b=self.STEP.join(buttons))
+                         for key, buttons in sorted(self.cfg.hotkeys.items()))
+
+    def _rearm_hotkeys(self) -> None:
+        """Take effect now, not at the next start.
+
+        A binding saved but inert until the program restarts would be the
+        same wart the settings had before they were written back at all.
+        """
+        if self.bridge is None:
+            return                   # nothing is listening yet; start() arms it
+        if self.hotkeys is not None:
+            self.hotkeys.stop()
+        self.bridge.cfg.hotkeys = self.cfg.hotkeys
+        self.hotkeys = self.bridge.start_hotkeys()
+
+    def read_slc_buttons(self) -> None:
+        """Offer what SLC is showing right now as suggestions.
+
+        Typing a button name from memory is how a binding ends up pointing
+        at nothing, and the names carry decoration nobody remembers.
+        """
+        def done(actions, error):
+            if error is not None:
+                self._write(t("feed.read_failed", error=error), "warn")
+                self._push("suggestions", [])
+                return
+            names = sorted({a.name for a in actions})
+            if not names:
+                self._write(t("feed.no_actions"), "warn")
+            self._push("suggestions", names)
+
+        self._write(t("feed.reading_slc"), "muted")
+        self._scan_in_background(done)
 
     def try_phrase(self, said: str) -> None:
         said = said.strip()

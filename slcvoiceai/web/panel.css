@@ -280,6 +280,55 @@ select:focus, .text-input:focus { border-color: var(--accent); }
 }
 .ghost:hover { background: #2a3542; border-color: #36455a; }
 
+/* ---------- hotkeys ---------- */
+.hotkeys { display: flex; flex-direction: column; gap: 6px; }
+
+.hotkey { display: flex; align-items: center; gap: 7px; }
+
+/* The key itself: shaped like a keycap, because that is what it is. */
+.keycap {
+  flex-shrink: 0;
+  min-width: 96px;
+  padding: 6px 9px;
+  font: 600 11px var(--mono);
+  color: var(--fg);
+  background: #1c242f;
+  border: 1px solid #38455a;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+.keycap:hover { border-color: var(--accent); }
+.keycap.listening {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(79, 163, 255, .1);
+  animation: waiting 1.1s ease-in-out infinite;
+}
+@keyframes waiting { 50% { opacity: .55; } }
+
+.hotkey .arrow { color: var(--muted); flex-shrink: 0; }
+.hotkey .text-input { font-size: 11.5px; padding: 6px 8px; }
+
+.hotkey-foot { margin-top: 9px; }
+.hotkey-foot .ghost { width: 100%; padding: 7px; }
+
+.hint {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-style: italic;
+  padding: 3px 0;
+}
+
 /* ---------- activity feed ---------- */
 .feed-card {
   flex: 1 1 auto;
