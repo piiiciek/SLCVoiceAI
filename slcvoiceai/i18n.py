@@ -66,20 +66,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "hotkeys.unbound": "not set",
         "hotkeys.clear": "Unbind",
         "hotkeys.none": "nothing bound",
-        "hotkeys.hint": ("Click a key to set it. A combination such as "
-                         "Ctrl + Q is usually free where a bare key is not - "
-                         "MSFS has most of them. Esc cancels."),
         "hotkeys.unusable": "-- that cannot be bound; try another combination",
         "hotkeys.is_ptt": "-- {key} is already the push-to-talk key",
         "hotkeys.duplicate": "-- {key} is already bound to another call",
         # -- controls
         "control.dry_run": "Dry run (decide, never press)",
         "control.confidence": "min confidence",
+        "control.hint": ("Below the floor nothing is pressed on the bridge's "
+                         "own judgement: it asks the cloud, or declines. "
+                         "Lower it to act more often, raise it to be more "
+                         "careful."),
         "control.language": "language",
         # The example stays in English in every language: it is what you
         # would say to SLC, and SLC's buttons are English.
         "test.placeholder": "e.g. cabin crew, prepare for landing",
         "test.match": "Match",
+        "test.hint": ("Runs typed text through the whole matching chain and "
+                      "shows every score, but never presses anything. Needs "
+                      "SLC running, since it matches against the buttons it "
+                      "is offering right now."),
         "feed.clear": "Clear",
         # -- feed
         "feed.welcome": ("SLCVoiceAI ready. Start SLC, get into a flight, "
@@ -127,18 +132,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "hotkeys.unbound": "nie przypisano",
         "hotkeys.clear": "Odepnij",
         "hotkeys.none": "nic nie przypisano",
-        "hotkeys.hint": ("Kliknij klawisz, żeby go ustawić. Kombinacja w "
-                         "rodzaju Ctrl + Q zwykle jest wolna tam, gdzie goły "
-                         "klawisz nie jest - MSFS zajmuje większość. Esc "
-                         "anuluje."),
         "hotkeys.unusable": "-- tego nie da się przypisać; spróbuj innej kombinacji",
         "hotkeys.is_ptt": "-- {key} jest już klawiszem do mówienia",
         "hotkeys.duplicate": "-- {key} jest już przypisany do innego wezwania",
         "control.dry_run": "Próba (decyduj, nic nie wciskaj)",
         "control.confidence": "min. pewność",
+        "control.hint": ("Poniżej progu most nie wciska nic na własną rękę — "
+                         "pyta chmurę albo odmawia. Niżej: działa częściej. "
+                         "Wyżej: ostrożniej."),
         "control.language": "język",
         "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
+        "test.hint": ("Przepuszcza wpisany tekst przez całe dopasowanie i "
+                      "pokazuje wyniki, ale niczego nie wciska. Wymaga "
+                      "uruchomionego SLC, bo dopasowuje do przycisków, które "
+                      "akurat oferuje."),
         "feed.clear": "Wyczyść",
         "feed.welcome": ("SLCVoiceAI gotowy. Uruchom SLC, wejdź w lot, "
                          "a potem przytrzymaj {key} i mów."),
