@@ -171,3 +171,18 @@ check_for_updates = true
 dry_run = false
 
 log_file = "slcvoiceai.log"
+
+[ui]
+# Language for the control panel: "auto", "en" or "pl".
+#
+# "auto" follows your Windows display language and falls back to English.
+# You can also change it from the picker in the panel, which takes effect
+# straight away.
+#
+# Only the interface is translated. The log stays in English on purpose: the
+# panel colours entries by matching on them, tools/replay_log.py parses them
+# to replay a flight against a newer build, and a log you send someone for
+# help is far more useful in a language they read. Adding a language means
+# copying one block in slcvoiceai/i18n.py and translating it - anything you
+# miss falls back to English rather than breaking.
+language = "auto"

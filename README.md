@@ -366,6 +366,7 @@ slcvoiceai/
   vocabulary.py Whisper hint list
   gemini.py     Gemini fallback matcher
   gui.py        tkinter control panel (--gui)
+  i18n.py       panel wording, English and Polish
   aliases.py    synonym table for aviation phraseology
   update.py     notice when GitHub has a newer version
 tools/
@@ -382,6 +383,7 @@ tests/
   test_windows.py   finding SLC's windows, and the windows to ignore
   test_flight_guard.py the six buttons that would end the flight
   test_update.py    version comparison, and failing quietly offline
+  test_i18n.py      translations stay complete and keep their placeholders
   test_config_keys.py  API keys: resolved, masked, never committed
 ```
 

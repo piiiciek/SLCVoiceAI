@@ -91,6 +91,15 @@ class SlcConfig:
 
 
 @dataclass
+class UiConfig:
+    #: Language for the control panel. "auto" follows the Windows display
+    #: language and falls back to English. Only the interface is translated;
+    #: the log stays in English so it can be read by anyone helping, and so
+    #: the tools that parse it keep working.
+    language: str = "auto"
+
+
+@dataclass
 class BehaviourConfig:
     min_confidence: float = 0.65
     dry_run: bool = False
@@ -122,6 +131,7 @@ class Config:
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
     slc: SlcConfig = field(default_factory=SlcConfig)
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
+    ui: UiConfig = field(default_factory=UiConfig)
 
     @property
     def needs_api_key(self) -> bool:
@@ -202,6 +212,7 @@ _SECTIONS = {
     "gemini": GeminiConfig,
     "slc": SlcConfig,
     "behaviour": BehaviourConfig,
+    "ui": UiConfig,
 }
 
 

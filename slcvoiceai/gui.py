@@ -24,10 +24,17 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+from . import i18n
 from .config import Config
+from .i18n import t
 from .slc_ui import SlcUI
 
 log = logging.getLogger(__name__)
+
+
+def _running_version() -> str:
+    from . import __version__
+    return __version__
 
 BG = "#11161c"
 FG = "#d6dde5"
@@ -62,6 +69,11 @@ class App:
         self.bridge = None
         self.ptt = None
         self.records: queue.Queue = queue.Queue()
+        i18n.set_language(cfg.ui.language)
+        #: Which status phrase is showing, so a language change can redraw it.
+        self._status_key = "status.stopped"
+        self._status_colour = MUTED
+        self._update_version = None
 
         self.root = tk.Tk()
         self.root.title("SLCVoiceAI")
@@ -90,11 +102,11 @@ class App:
         top = ttk.Frame(self.root, padding=(10, 8))
         top.pack(fill="x")
 
-        self.status = tk.Label(top, text="●  stopped", bg=BG, fg=MUTED,
+        self.status = tk.Label(top, text=t("status.stopped"), bg=BG, fg=MUTED,
                                font=("Segoe UI", 10, "bold"))
         self.status.pack(side="left")
 
-        self.btn = ttk.Button(top, text="Start listening", command=self._toggle)
+        self.btn = ttk.Button(top, text=t("button.start"), command=self._toggle)
         self.btn.pack(side="right")
 
         self.subtitle = tk.Label(self.root, text="", bg=BG, fg=MUTED, font=FONT,
@@ -113,11 +125,14 @@ class App:
         ctrl.pack(fill="x")
 
         self.dry = tk.BooleanVar(value=self.cfg.behaviour.dry_run)
-        ttk.Checkbutton(ctrl, text="Dry run (decide, never press)",
-                        variable=self.dry, command=self._sync_dry).pack(side="left")
+        self.dry_check = ttk.Checkbutton(
+            ctrl, text=t("control.dry_run"), variable=self.dry,
+            command=self._sync_dry)
+        self.dry_check.pack(side="left")
 
-        tk.Label(ctrl, text="min confidence", bg=BG, fg=MUTED,
-                 font=FONT).pack(side="left", padx=(16, 4))
+        self.conf_label = tk.Label(ctrl, text=t("control.confidence"), bg=BG,
+                                   fg=MUTED, font=FONT)
+        self.conf_label.pack(side="left", padx=(16, 4))
         self.thresh = tk.DoubleVar(value=self.cfg.behaviour.min_confidence)
         scale = ttk.Scale(ctrl, from_=0.3, to=0.95, variable=self.thresh,
                           command=self._sync_threshold, length=110)
@@ -126,25 +141,39 @@ class App:
                                    bg=BG, fg=ACCENT, font=FONT, width=5)
         self.thresh_lbl.pack(side="left")
 
+        self.lang_label = tk.Label(ctrl, text=t("control.language"), bg=BG,
+                                   fg=MUTED, font=FONT)
+        self.lang_label.pack(side="left", padx=(16, 4))
+        names = i18n.available()
+        self.lang = tk.StringVar(value=names.get(i18n.current(), "English"))
+        picker = ttk.OptionMenu(ctrl, self.lang, self.lang.get(),
+                                *names.values(), command=self._sync_language)
+        picker.configure(width=8)
+        picker.pack(side="left")
+
         # -- typed test
         test = ttk.Frame(self.root, padding=(10, 4))
         test.pack(fill="x")
-        tk.Label(test, text="Try a phrase without speaking:", bg=BG, fg=MUTED,
-                 font=FONT).pack(anchor="w")
+        self.test_label = tk.Label(test, text=t("test.prompt"), bg=BG, fg=MUTED,
+                                   font=FONT)
+        self.test_label.pack(anchor="w")
         row = ttk.Frame(test)
         row.pack(fill="x", pady=(3, 0))
         self.entry = tk.Entry(row, bg="#1b222b", fg=FG, insertbackground=FG,
                               relief="flat", font=FONT)
         self.entry.pack(side="left", fill="x", expand=True, ipady=4)
         self.entry.bind("<Return>", lambda _e: self._try_phrase())
-        ttk.Button(row, text="Match", command=self._try_phrase).pack(side="left", padx=(6, 0))
+        self.match_btn = ttk.Button(row, text=t("test.match"),
+                                    command=self._try_phrase)
+        self.match_btn.pack(side="left", padx=(6, 0))
 
         # -- panes
         panes = ttk.Frame(self.root, padding=(10, 8))
         panes.pack(fill="both", expand=True)
 
-        tk.Label(panes, text="ACTIVITY", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.activity_label = tk.Label(panes, text=t("pane.activity"), bg=BG,
+                                       fg=MUTED, font=("Segoe UI", 8, "bold"))
+        self.activity_label.pack(anchor="w")
         self.feed = tk.Text(panes, height=16, bg="#161c24", fg=FG, relief="flat",
                             font=FONT, wrap="word", padx=8, pady=6)
         self.feed.pack(fill="both", expand=True)
@@ -219,18 +248,17 @@ class App:
         threading.Thread(target=work, daemon=True).start()
 
     def _show_update(self, version: str) -> None:
-        from . import __version__, update
+        from . import update
 
+        self._update_version = version
         self.update_banner.configure(
-            text="↑  SLCVoiceAI {new} is available  (you have {old})  -  "
-                 "click to open GitHub".format(new=version, old=__version__))
+            text=t("update.banner", new=version, old=_running_version()))
         # Under the status line, above everything else, so it is the first
         # thing read - and it was never packed before now, so a current copy
         # never gives up a pixel to it.
         self.update_banner.pack(fill="x", after=self.subtitle)
-        self._write("-- version {new} is on GitHub; this is {old}  ({url})"
-                    .format(new=version, old=__version__,
-                            url=update.RELEASES_URL), "ok")
+        self._write(t("update.feed", new=version, old=_running_version(),
+                      url=update.RELEASES_URL), "ok")
 
     def _open_repository(self) -> None:
         import webbrowser
@@ -266,14 +294,52 @@ class App:
 
         threading.Thread(target=work, daemon=True).start()
 
+    # -- language ----------------------------------------------------------
+    def _set_status(self, key: str, colour: str) -> None:
+        """Remember which phrase is showing, so it can be redrawn."""
+        self._status_key, self._status_colour = key, colour
+        self.status.configure(text=t(key), fg=colour)
+
+    def _sync_language(self, chosen: str) -> None:
+        for code, name in i18n.available().items():
+            if name == chosen:
+                i18n.set_language(code)
+                self.cfg.ui.language = code
+                break
+        self._retranslate()
+        self._write(t("feed.language_changed", name=chosen), "accent")
+
+    def _retranslate(self) -> None:
+        """Re-label everything in place.
+
+        The activity feed is left as it stands: those lines are a record of
+        what happened, and rewriting history in a new language would be a
+        strange thing for a log to do. New entries arrive translated.
+        """
+        self.status.configure(text=t(self._status_key), fg=self._status_colour)
+        self.btn.configure(text=t("button.stop") if self.bridge is not None
+                           else t("button.start"))
+        self.dry_check.configure(text=t("control.dry_run"))
+        self.conf_label.configure(text=t("control.confidence"))
+        self.lang_label.configure(text=t("control.language"))
+        self.test_label.configure(text=t("test.prompt"))
+        self.match_btn.configure(text=t("test.match"))
+        self.activity_label.configure(text=t("pane.activity"))
+        if self.bridge is not None:
+            self._describe_bridge()
+        if self._update_version:
+            self.update_banner.configure(text=t(
+                "update.banner", new=self._update_version,
+                old=_running_version()))
+
     # -- controls ----------------------------------------------------------
     def _sync_dry(self) -> None:
         self.cfg.behaviour.dry_run = bool(self.dry.get())
         if self.bridge is not None:
             self.bridge.cfg.behaviour.dry_run = self.cfg.behaviour.dry_run
-        self._write("-- dry run {}".format(
-            "on: nothing will be pressed" if self.cfg.behaviour.dry_run
-            else "off: matches will be pressed for real"), "accent")
+        self._write(t("feed.dry_run", state=t("feed.dry_on")
+                      if self.cfg.behaviour.dry_run else t("feed.dry_off")),
+                    "accent")
 
     def _sync_threshold(self, _value=None) -> None:
         value = round(float(self.thresh.get()), 2)
@@ -289,17 +355,16 @@ class App:
         said = self.entry.get().strip()
         if not said:
             return
-        self._write('-- typed: "{s}"  (reading SLC...)'.format(s=said), "accent")
+        self._write(t("feed.typed", said=said), "accent")
         self._scan_in_background(lambda actions, error:
                                  self._show_ranking(said, actions, error))
 
     def _show_ranking(self, said: str, actions: list, error) -> None:
         if error is not None:
-            self._write("     could not read SLC: {e}".format(e=error), "warn")
+            self._write(t("feed.read_failed", error=error), "warn")
             return
         if not actions:
-            self._write("     no actions to match against (is SLC running?)",
-                        "warn")
+            self._write(t("feed.no_actions"), "warn")
             return
 
         router = getattr(self.bridge, "router", None)
@@ -311,12 +376,13 @@ class App:
             for score, _i, action in router.rank(said, actions)[:4]:
                 passes = score >= self.cfg.behaviour.min_confidence
                 self._write("     {:.2f}  {:<34} {}".format(
-                    score, action.name, "PASS" if passes else "below floor"),
+                    score, action.name,
+                    t("feed.pass") if passes else t("feed.below_floor")),
                     "ok" if passes else "muted")
         else:
             decision = router.decide(said, actions)
             if decision.action_index is None:
-                self._write("     declined: {r}".format(r=decision.reasoning), "warn")
+                self._write(t("feed.declined", reason=decision.reasoning), "warn")
             else:
                 self._write("     {:.2f}  {}".format(
                     decision.confidence,
@@ -330,9 +396,9 @@ class App:
             self._stop()
 
     def _start(self) -> None:
-        self.btn.configure(state="disabled", text="Starting...")
-        self.status.configure(text="●  loading Whisper", fg=WARN)
-        self._write("-- loading the speech model, this takes a few seconds", "muted")
+        self.btn.configure(state="disabled", text=t("button.starting"))
+        self._set_status("status.loading", WARN)
+        self._write(t("feed.loading_model"), "muted")
         threading.Thread(target=self._start_worker, daemon=True).start()
 
     def _start_worker(self) -> None:
@@ -355,27 +421,32 @@ class App:
             self.root.after(0, self._start_failed)
 
     def _started(self) -> None:
+        self._set_status("status.listening", OK)
+        self._describe_bridge()
+        self.btn.configure(state="normal", text=t("button.stop"))
+
+    def _describe_bridge(self) -> None:
+        """The subtitle line, rebuilt - it is also what a language change
+        has to redraw, so it lives on its own."""
         device = getattr(getattr(self.bridge, "stt", None), "_device", "?")
-        self.status.configure(text="●  listening", fg=OK)
-        self.subtitle.configure(
-            text="hold {key} and speak   ·   whisper {model} on {dev}   ·   {backend}".format(
-                key=self.cfg.audio.ptt_key, model=self.cfg.stt.model,
-                dev=device, backend=self.cfg.intent.backend))
-        self.btn.configure(state="normal", text="Stop")
+        self.subtitle.configure(text=t(
+            "subtitle.ready", key=self.cfg.audio.ptt_key,
+            model=self.cfg.stt.model, dev=device,
+            backend=self.cfg.intent.backend))
 
     def _start_failed(self) -> None:
-        self.status.configure(text="●  failed to start", fg=BAD)
-        self.btn.configure(state="normal", text="Start listening")
+        self._set_status("status.failed", BAD)
+        self.btn.configure(state="normal", text=t("button.start"))
         self.bridge = None
 
     def _stop(self) -> None:
         if self.ptt is not None:
             self.ptt.stop()
         self.bridge, self.ptt = None, None
-        self.status.configure(text="●  stopped", fg=MUTED)
+        self._set_status("status.stopped", MUTED)
         self.subtitle.configure(text="")
-        self.btn.configure(text="Start listening")
-        self._write("-- stopped listening", "muted")
+        self.btn.configure(text=t("button.start"))
+        self._write(t("feed.stopped"), "muted")
 
     def _on_close(self) -> None:
         if self.ptt is not None:
@@ -383,10 +454,8 @@ class App:
         self.root.destroy()
 
     def run(self) -> int:
-        self._write("SLCVoiceAI ready. Start SLC, get into a flight, then press "
-                    "Start listening.", "muted")
-        self._write("You can also type a phrase above to test matching without "
-                    "a microphone.", "muted")
+        self._write(t("feed.welcome", key=self.cfg.audio.ptt_key), "muted")
+        self._write(t("feed.welcome_typed"), "muted")
         self.root.mainloop()
         return 0
 
