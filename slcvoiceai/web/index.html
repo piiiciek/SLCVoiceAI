@@ -22,7 +22,13 @@
     <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
   </span>
   <span class="wordmark">SLCVoiceAI</span>
-  <span class="version" id="version"></span>
+  <!-- Language sits here rather than among the controls: it is set once
+       and then never touched, unlike the things in the Controls card,
+       which are tuned during a flight. -->
+  <div class="titlebar-right">
+    <span class="version" id="version"></span>
+    <select id="lang" class="lang-select" data-i18n-title="control.language"></select>
+  </div>
 </header>
 
 <div class="update" id="update" hidden>
@@ -61,12 +67,6 @@
     </div>
     <div class="slider-row">
       <input type="range" id="conf" min="0.30" max="0.95" step="0.01">
-    </div>
-
-    <div class="row">
-      <span class="label" data-i18n="control.language"></span>
-      <span class="spacer"></span>
-      <select id="lang"></select>
     </div>
   </section>
 

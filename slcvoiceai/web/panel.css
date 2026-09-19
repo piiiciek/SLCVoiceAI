@@ -60,8 +60,14 @@ body {
 }
 .mark svg { width: 13px; height: 13px; fill: var(--accent); }
 .wordmark { font-size: 13px; font-weight: 650; letter-spacing: .2px; }
-.version {
+.titlebar-right {
   margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.version {
   font: 10px var(--mono);
   color: var(--muted);
   background: rgba(255, 255, 255, .045);
@@ -69,6 +75,16 @@ body {
   border-radius: 999px;
   padding: 2px 8px;
 }
+/* Quieter than the controls in the cards below, because it is a setting
+   rather than something tuned mid-flight. */
+.lang-select {
+  padding: 1px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+.lang-select:hover { color: var(--fg); border-color: var(--card-line); }
 
 /* ---------- update notice ----------
    Takes no space at all until there is something to say, so a current
