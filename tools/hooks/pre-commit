@@ -1,0 +1,20 @@
+#!/bin/sh
+# Set __version__ to today before the commit is written.
+#
+# The panel's update check reads that line off GitHub's default branch, so a
+# change pushed without bumping it reaches nobody - every copy compares equal
+# and stays quiet. This is the one step that must not depend on remembering.
+#
+# Install:  git config core.hooksPath tools/hooks
+#
+# Idempotent: several commits on one day share a version, and a version that
+# is already ahead is left alone. Nothing here can fail a commit - a broken
+# bump is worth far less than a blocked commit, so it warns and stands aside.
+
+python tools/bump_version.py || {
+    echo "pre-commit: could not bump the version; committing as it stands" >&2
+    exit 0
+}
+
+git add slcvoiceai/__init__.py 2>/dev/null || true
+exit 0

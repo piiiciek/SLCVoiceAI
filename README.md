@@ -374,6 +374,8 @@ tools/
   probe_cache.py  ways of reading the UIA tree, measured against each other
   close_slc.py    close SLC, answering its "are you sure?" dialog
   replay_log.py   replay a flight log against today's matcher
+  bump_version.py set __version__ to today (the pre-commit hook runs it)
+  hooks/          git hooks: git config core.hooksPath tools/hooks
 tests/
   test_intent.py    routing regressions, runs without SLC
   test_hardware.py  model selection across VRAM levels
@@ -384,6 +386,7 @@ tests/
   test_flight_guard.py the six buttons that would end the flight
   test_update.py    version comparison, and failing quietly offline
   test_i18n.py      translations stay complete and keep their placeholders
+  test_bump_version.py  the version never moves backwards
   test_config_keys.py  API keys: resolved, masked, never committed
 ```
 
