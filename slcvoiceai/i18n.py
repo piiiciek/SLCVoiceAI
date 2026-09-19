@@ -72,10 +72,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # -- controls
         "control.dry_run": "Dry run (decide, never press)",
         "control.confidence": "min confidence",
-        "control.hint": ("Below the floor nothing is pressed on the bridge's "
-                         "own judgement: it asks the cloud, or declines. "
-                         "Lower it to act more often, raise it to be more "
-                         "careful."),
+        "control.hint": ("The lower the slider, the more often it presses on "
+                         "its own - quicker, but likelier to get one wrong. "
+                         "The higher, the more often it checks again or does "
+                         "nothing - slower, but surer."),
         "control.language": "language",
         # The example stays in English in every language: it is what you
         # would say to SLC, and SLC's buttons are English.
@@ -83,8 +83,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "test.match": "Match",
         "test.hint": ("Runs typed text through the whole matching chain and "
                       "shows every score, but never presses anything. Needs "
-                      "SLC running, since it matches against the buttons it "
-                      "is offering right now."),
+                      "SLC running."),
         "feed.clear": "Clear",
         # -- feed
         "feed.welcome": ("SLCVoiceAI ready. Start SLC, get into a flight, "
@@ -137,16 +136,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "hotkeys.duplicate": "-- {key} jest już przypisany do innego wezwania",
         "control.dry_run": "Próba (decyduj, nic nie wciskaj)",
         "control.confidence": "min. pewność",
-        "control.hint": ("Poniżej progu most nie wciska nic na własną rękę — "
-                         "pyta chmurę albo odmawia. Niżej: działa częściej. "
-                         "Wyżej: ostrożniej."),
+        "control.hint": ("Im niżej suwak, tym częściej program wciska sam — "
+                         "szybciej, ale łatwiej o pomyłkę. Im wyżej, tym "
+                         "częściej dopytuje albo nie robi nic — wolniej, ale "
+                         "pewniej."),
         "control.language": "język",
         "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
         "test.hint": ("Przepuszcza wpisany tekst przez całe dopasowanie i "
                       "pokazuje wyniki, ale niczego nie wciska. Wymaga "
-                      "uruchomionego SLC, bo dopasowuje do przycisków, które "
-                      "akurat oferuje."),
+                      "uruchomionego SLC."),
         "feed.clear": "Wyczyść",
         "feed.welcome": ("SLCVoiceAI gotowy. Uruchom SLC, wejdź w lot, "
                          "a potem przytrzymaj {key} i mów."),
