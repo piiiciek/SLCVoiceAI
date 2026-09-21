@@ -43,10 +43,17 @@ log = logging.getLogger(__name__)
 #: with the spaces, because that is the string the matcher normalises
 #: against. Nothing here is user-editable; the keys on the left are what
 #: config.toml and the panel talk about.
+#:
+#: "back" needs only one binding for all three menus. SLC shows one BACK
+#: at a time - the one belonging to whichever submenu is open - and the
+#: button list is read at the moment the key is pressed, so the same key
+#: backs out of any of them. Measured across 224 scans logged in flight:
+#: 130 offered a BACK, none ever offered two.
 ACTIONS: dict[str, tuple[str, ...]] = {
     "intercom": ("INTERCOM",),
     "ground": ("GROUND CREW",),
     "pa": ("P A SYSTEM",),
+    "back": ("BACK",),
 }
 
 

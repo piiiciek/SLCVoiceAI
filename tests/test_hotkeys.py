@@ -39,10 +39,11 @@ class FakeAction:
         self.presses += 1
 
 
-# Real names, taken from the button lists logged during actual flights.
+# Real names, taken from the button lists logged during actual flights -
+# including the two that look alike, BACK and I'LL CALL YOU BACK.
 REAL = ["INTERCOM >", "GROUND CREW >", "P A SYSTEM >", "PHONE >",
         "PURSER TO INTERCOM", "CABIN CREW ARE CALLING...", "START BOARDING",
-        "DISREGARD", "ROGER", "STANDBY"]
+        "DISREGARD", "ROGER", "STANDBY", "BACK", "I'LL CALL YOU BACK"]
 
 
 def bridge_with(actions, **behaviour):
@@ -68,16 +69,17 @@ def bridge_with(actions, **behaviour):
 
 # -- the three calls hit the buttons they name -----------------------------
 
-def test_there_are_exactly_three_calls():
+def test_the_set_of_calls_is_fixed():
     """Deliberately not "bind any key to any button". Every extra field
     was another way to end up with a binding pointing at nothing."""
-    assert sorted(ACTIONS) == ["ground", "intercom", "pa"]
+    assert sorted(ACTIONS) == ["back", "ground", "intercom", "pa"]
 
 
 @pytest.mark.parametrize("action, expected", [
     ("intercom", "INTERCOM >"),
     ("ground", "GROUND CREW >"),
     ("pa", "P A SYSTEM >"),
+    ("back", "BACK"),
 ])
 def test_each_call_finds_its_button_among_the_real_ones(action, expected):
     """The names in ACTIONS have to survive normalisation onto what SLC
@@ -101,6 +103,37 @@ def test_an_ambiguous_name_presses_nothing():
     """A key standing in for a physical switch does not guess."""
     both = [FakeAction("CREW REST"), FakeAction("CREW MEALS")]
     assert bridge_with(both).find_named(both, "CREW") is None
+
+
+def test_back_is_not_confused_with_the_button_that_merely_says_back():
+    """SLC offers both BACK and I'LL CALL YOU BACK, and in 130 of the 224
+    scans logged in flight they were on screen together. An exact match on
+    the normalised name is what separates them - a substring would hit
+    both and, under the ambiguity rule, press neither."""
+    actions = [FakeAction(n) for n in REAL]
+    found = bridge_with(actions).find_named(actions, ACTIONS["back"][0])
+    assert found is not None and found.name == "BACK"
+
+
+def test_one_binding_backs_out_of_every_menu():
+    """SLC shows one BACK at a time, belonging to whichever submenu is
+    open, and the buttons are read when the key is pressed. So the same
+    key works in all of them - no per-menu binding."""
+    for opened in ("INTERCOM >", "GROUND CREW >", "P A SYSTEM >"):
+        menu = [FakeAction(opened), FakeAction("BACK"),
+                FakeAction("I'LL CALL YOU BACK")]
+        bridge_with(menu).press_named("back", ACTIONS["back"])
+        pressed = [a.name for a in menu if a.presses]
+        assert pressed == ["BACK"], "in {m}: pressed {p}".format(
+            m=opened, p=pressed)
+
+
+def test_backing_out_when_no_menu_is_open_does_nothing():
+    """Nothing to back out of is not an error - just a key that finds no
+    BACK on offer and says so in the log."""
+    actions = [FakeAction("INTERCOM >"), FakeAction("GROUND CREW >")]
+    bridge_with(actions).press_named("back", ACTIONS["back"])
+    assert not any(a.presses for a in actions)
 
 
 def test_dry_run_presses_nothing():
@@ -437,8 +470,12 @@ def test_the_answer_always_carries_what_is_really_bound(tmp_path):
     panel = panel_with(tmp_path)
     panel.set_binding("intercom", {"code": "KeyQ", "ctrl": True})
     refused = panel.set_binding("ground", {"code": "KeyQ", "ctrl": True})
-    assert [(r["action"], r["shown"]) for r in refused["rows"]] == [
-        ("intercom", "Ctrl + Q"), ("ground", ""), ("pa", "")]
+
+    shown = {row["action"]: row["shown"] for row in refused["rows"]}
+    assert list(shown) == list(ACTIONS), "the card lost or gained a row"
+    assert shown["intercom"] == "Ctrl + Q", "the binding that stood was lost"
+    assert not any(value for action, value in shown.items()
+                   if action != "intercom"), "the refused binding was kept"
 
 
 def test_binding_without_a_config_on_disk_does_not_explode():

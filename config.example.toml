@@ -200,6 +200,7 @@ language = "auto"
 #   intercom  call the cabin crew        (the ATT button)
 #   ground    call the ground crew       (the MECH button)
 #   pa        announcement to passengers
+#   back      back out of whichever menu is open
 #
 # Nothing is bound by default. Uncomment what you want, or set it in the
 # panel, which writes it back here for you.
@@ -207,6 +208,7 @@ language = "auto"
 #   intercom = "ctrl+q"
 #   ground   = "ctrl+w"
 #   pa       = "ctrl+e"
+#   back     = "ctrl+r"
 #
 # Use a COMBINATION rather than a bare key. MSFS already has a binding for
 # nearly every single key, so ctrl+q is far likelier to be free than q.
@@ -216,3 +218,7 @@ language = "auto"
 # The key itself is a single character, or a name: insert, delete, home,
 # end, page_up, page_down, scroll_lock, pause, f1-f20, num_lock, menu,
 # tab, esc, space, backspace, up, down, left, right.
+#
+# One binding covers back out of all three menus: SLC only ever shows one
+# BACK at a time, the one belonging to whichever submenu is open, and the
+# buttons are read at the moment the key is pressed.

@@ -303,6 +303,11 @@ Three calls can be bound, and what each one presses is fixed:
 | `intercom` | call the cabin crew — the **ATT** button |
 | `ground` | call the ground crew — the **MECH** button |
 | `pa` | announcement to the passengers |
+| `back` | back out of whichever menu is open |
+
+`back` needs only one binding for all three menus. SLC shows one **BACK** at a
+time — the one belonging to the submenu you are in — and the button list is read
+at the moment you press the key, so the same key gets you out of any of them.
 
 Set them in the panel: click a key in the **Keys bound to SLC buttons** card and
 press the combination you want. It is written to `config.toml` and armed on the
@@ -313,6 +318,7 @@ spot — nothing needs restarting. Or write it yourself:
 intercom = "ctrl+q"
 ground   = "ctrl+w"
 pa       = "ctrl+e"
+back     = "ctrl+r"
 ```
 
 **Use a combination, not a bare key.** MSFS already has a binding for nearly
