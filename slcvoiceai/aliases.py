@@ -256,6 +256,66 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "extended enroute delay": ("long enroute delay", "big enroute delay"),
     "sorry for the delay": ("apologies for the delay", "sorry about the delay"),
 
+    # --- apologising ------------------------------------------------------
+    # Polish "przepraszam" comes back as "I'm sorry", which shares nothing
+    # with APOLOGIES - measured at 0.12 against it, 272nd of 295 lines.
+    "apologies": ("im sorry", "i am sorry", "i apologise", "we apologise",
+                  "my apologies", "our apologies", "i do apologise"),
+    "thats my bad": ("my fault", "my mistake", "that was my fault", "my bad",
+                     "sorry that was me"),
+
+    # --- seating the cabin -------------------------------------------------
+    # Telling the cabin to sit down was refused outright with the button on
+    # screen: "sit down please" 0.38, "everyone sit down" 0.32, "stay in
+    # your seats" 0.54 - all under the floor. Polish "usiadzcie" comes back
+    # as "sit down", and SLC's word is "seated".
+    #
+    # The keys are the full button names on purpose, and not "be seated":
+    # that also matches BE SEATED FOR TAKEOFF NOW and BE SEATED FOR LANDING
+    # NOW, and since only the longest matching key applies, a short key here
+    # would hand those two every alias below and make the phase-less phrase
+    # ambiguous against them.
+    "please be seated": ("sit down", "sit down please", "please sit down",
+                         "you can sit down", "you may sit down",
+                         "everyone sit down"),
+    "please remain seated": ("stay seated", "stay in your seats",
+                             "remain in your seats", "please stay seated",
+                             "keep your seats", "do not get up"),
+    # The same instruction with a phase attached, which is what a pilot
+    # actually says: "mozecie usiasc, zaraz bedziemy ladowac" comes back as
+    # "you can sit down, we will land in a moment". Recorded in a real
+    # flight, where it reached BE SEATED FOR LANDING NOW at 0.35 and
+    # nothing cleared the floor.
+    "be seated for landing": ("sit down we are landing",
+                              "you can sit down we are landing",
+                              "sit down for landing",
+                              "everyone sit down we are landing",
+                              "sit down we will land in a moment"),
+    "be seated for takeoff": ("sit down we are taking off",
+                              "sit down for takeoff",
+                              "everyone sit down we are taking off"),
+
+    # --- turning back ------------------------------------------------------
+    # Covers RETURN TO AIRPORT and RETURNING TO AIRPORT, which mean the same
+    # thing and are never both the answer.
+    "to airport": ("we are going back", "going back", "turning back",
+                   "we are turning back", "heading back", "we are returning",
+                   "back to the airport"),
+
+    # --- announcements -----------------------------------------------------
+    # "please listen" is deliberately absent: PLEASE LISTEN TO THE CABIN CREW
+    # is a different announcement and already answers to it by name.
+    "listen to instructions": ("listen carefully", "listen to me carefully",
+                               "pay attention to the instructions"),
+    "relax and enjoy": ("sit back and relax", "enjoy the flight", "sit back",
+                        "enjoy your flight", "make yourselves comfortable"),
+
+    # --- ending a call -----------------------------------------------------
+    # "disconnect" on its own is left out: DISCONNECT JETWAY is a different
+    # button, and losing that distinction would be worse than the gap.
+    "hangup": ("hang up", "hang up the phone", "end the call",
+               "disconnect the call"),
+
     # --- plain answers ---------------------------------------------------
     "yes": ("yes please", "yep", "yeah", "go for it", "permission granted",
             "granted", "approved"),

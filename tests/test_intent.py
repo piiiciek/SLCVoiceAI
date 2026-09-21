@@ -860,3 +860,132 @@ def test_answering_a_call_reaches_go_ahead(router, said):
     decision = router.decide(said, actions)
     assert decision.action_index is not None, "declined: " + said
     assert actions[decision.action_index].name == "GO AHEAD"
+
+
+# -- the gaps a coverage audit of all 295 SLC lines turned up --------------
+#
+# Every case below was measured against the real matcher before the aliases
+# existed, and the score it reached then is in the comment. None were
+# reachable by wording alone: Whisper translates the sense of the Polish
+# rather than its shape, so the words that arrive share nothing with the
+# button's own.
+
+#: Around the seating button, whatever it is. SLC offers these variants one
+#: at a time - across 238 scans logged in flight, never two together - so a
+#: test that puts them all on screen is testing a situation that does not
+#: arise, and the matcher rightly refuses to choose between them.
+NEIGHBOURS = ("THANK YOU", "INTERCOM >", "P A SYSTEM >", "BACK")
+
+
+@pytest.mark.parametrize("said,expected", [
+    # "usiadzcie" -> refused at 0.38 with PLEASE BE SEATED on screen
+    ("sit down please", "PLEASE BE SEATED"),
+    ("please sit down", "PLEASE BE SEATED"),
+    ("everyone sit down", "PLEASE BE SEATED"),          # was 0.32
+    # "zostancie na miejscach" -> 0.54, under the floor
+    ("stay in your seats", "PLEASE REMAIN SEATED"),
+    ("please stay seated", "PLEASE REMAIN SEATED"),
+    # the same instruction with a phase attached, which is how it is said
+    ("sit down we are landing", "BE SEATED FOR LANDING NOW"),
+    ("sit down we are taking off", "BE SEATED FOR TAKEOFF NOW"),
+])
+def test_seating_the_cabin_reaches_the_right_button(router, said, expected):
+    actions = [FakeAction(n) for n in (expected,) + NEIGHBOURS]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected, said
+
+
+def test_a_phrase_with_no_phase_does_not_pick_one(router):
+    """If SLC ever did offer the takeoff and landing variants together,
+    "sit down please" says nothing about which - so refusing and asking is
+    right, and guessing would be a confident wrong press.
+
+    This is also why the aliases are keyed to whole button names: a key of
+    "be seated" would have handed both variants the phase-less phrases and
+    made this tie unbreakable.
+    """
+    actions = [FakeAction(n) for n in
+               ("BE SEATED FOR TAKEOFF NOW", "BE SEATED FOR LANDING NOW",
+                "THANK YOU", "BACK")]
+    decision = router.decide("sit down please", actions)
+    assert decision.action_index is None, (
+        "picked {n!r} with nothing to go on".format(
+            n=actions[decision.action_index].name))
+
+
+def test_the_recorded_sit_down_for_landing_utterance(router):
+    """From the flight of 18.09: "Ok dziekuje, mozecie usiasc, zaraz
+    bedziemy ladowac". It pressed THANK YOU, then - once reach was measured
+    properly - reached 0.35 and was refused. Neither is the button meant."""
+    actions = [FakeAction(n) for n in
+               ("THANK YOU", "BE SEATED FOR LANDING NOW", "INTERCOM >",
+                "I'll CALL WHEN WE'RE READY", "BACK")]
+    said = "ok, thank you, you can sit down, we will land in a moment"
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "still refused"
+    assert actions[decision.action_index].name == "BE SEATED FOR LANDING NOW"
+
+
+def test_thanking_on_its_own_still_thanks(router):
+    """The other half of that case: the seating aliases must not swallow a
+    plain thank-you, which opens with the same words."""
+    actions = [FakeAction(n) for n in
+               ("THANK YOU", "BE SEATED FOR LANDING NOW", "BACK")]
+    decision = router.decide("ok, thank you", actions)
+    assert actions[decision.action_index].name == "THANK YOU"
+
+
+@pytest.mark.parametrize("said,expected", [
+    # "przepraszam" -> APOLOGIES at 0.12, 272nd of 295
+    ("i am sorry", "APOLOGIES"),
+    ("my apologies", "APOLOGIES"),
+    # "moja wina" -> THAT'S MY BAD at 0.29
+    ("my fault", "THAT'S MY BAD"),
+    ("my mistake", "THAT'S MY BAD"),
+])
+def test_apologising_reaches_an_apology(router, said, expected):
+    actions = [FakeAction(n) for n in
+               ("APOLOGIES", "THAT'S MY BAD", "THANK YOU", "ROGER", "BACK")]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected, said
+
+
+@pytest.mark.parametrize("said", [
+    "we are going back", "we are turning back", "heading back",
+])
+def test_turning_back_reaches_the_return(router, said):
+    """"wracamy" -> RETURNING TO AIRPORT at 0.37, 37th of 295."""
+    actions = [FakeAction(n) for n in
+               ("RETURNING TO AIRPORT", "CONTINUE FLIGHT", "THANK YOU", "BACK")]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == "RETURNING TO AIRPORT", said
+
+
+@pytest.mark.parametrize("said,expected", [
+    ("listen carefully", "LISTEN TO INSTRUCTIONS"),     # was 0.55
+    ("sit back and relax", "RELAX AND ENJOY"),          # was 0.62
+    ("enjoy the flight", "RELAX AND ENJOY"),
+    ("hang up", "CANCEL / HANGUP"),                     # was 0.60
+    ("end the call", "CANCEL / HANGUP"),
+])
+def test_the_remaining_audit_gaps_are_reachable(router, said, expected):
+    actions = [FakeAction(n) for n in
+               ("LISTEN TO INSTRUCTIONS", "PLEASE LISTEN TO THE CABIN CREW",
+                "RELAX AND ENJOY", "CANCEL / HANGUP", "DISCONNECT JETWAY",
+                "THANK YOU", "BACK")]
+    decision = router.decide(said, actions)
+    assert decision.action_index is not None, "declined: " + said
+    assert actions[decision.action_index].name == expected, said
+
+
+def test_ending_a_call_is_not_pulling_the_jetway(router):
+    """"disconnect" is deliberately not an alias for hanging up: it is what
+    you say to move a jetway, and losing that distinction would be worse
+    than the gap the alias closes."""
+    actions = [FakeAction(n) for n in
+               ("CANCEL / HANGUP", "DISCONNECT JETWAY", "CONNECT JETWAY")]
+    decision = router.decide("disconnect the jetway", actions)
+    assert actions[decision.action_index].name == "DISCONNECT JETWAY"
