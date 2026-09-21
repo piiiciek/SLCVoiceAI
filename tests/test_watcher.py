@@ -78,18 +78,54 @@ def test_the_process_name_is_matched_whatever_the_case():
     assert watcher.is_running(Path(sys.executable).name.upper())
 
 
-def test_a_panel_that_is_not_open_is_not_found():
+def test_a_window_nobody_has_is_not_found(monkeypatch):
+    """Asserting the panel is shut would only pass while it is shut - and
+    it was open the first time this suite ran on a real machine. The rule
+    under test is the lookup, not what happens to be running."""
+    monkeypatch.setattr(watcher, "PANEL_TITLE", "NoWindowIsCalledThis-4f2a")
     assert not watcher.panel_is_open()
+
+
+def test_a_window_that_is_there_is_found(monkeypatch):
+    """The other direction, against whatever this desktop really has open,
+    so the enumeration itself is exercised rather than mocked away."""
+    titles = _open_window_titles()
+    assert titles, "no visible window has a title - cannot test this here"
+    monkeypatch.setattr(watcher, "PANEL_TITLE", titles[0])
+    assert watcher.panel_is_open()
 
 
 def test_the_panel_is_matched_on_the_whole_title(monkeypatch):
     """There is an Explorer window called "SLCVoiceAI - Eksplorator plikow"
     on the machine this was written on. Matching a fragment would read
     that as the panel and then never launch anything."""
-    titles = ["SLCVoiceAI - Eksplorator plikow", "Self-Loading Cargo"]
-    monkeypatch.setattr(watcher, "_titles", lambda: titles, raising=False)
-    assert watcher.PANEL_TITLE not in titles
-    assert not any(t.strip() == watcher.PANEL_TITLE for t in titles)
+    titles = _open_window_titles()
+    long_enough = next((t for t in titles if len(t) > 6), None)
+    assert long_enough, "no title long enough to take a fragment of"
+    monkeypatch.setattr(watcher, "PANEL_TITLE", long_enough[:len(long_enough) // 2])
+    assert not watcher.panel_is_open()
+
+
+def _open_window_titles():
+    import ctypes
+    from ctypes import wintypes
+
+    u32 = ctypes.WinDLL("user32", use_last_error=True)
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _lparam):
+        if u32.IsWindowVisible(hwnd):
+            length = u32.GetWindowTextLengthW(hwnd)
+            if length:
+                buf = ctypes.create_unicode_buffer(length + 1)
+                u32.GetWindowTextW(hwnd, buf, length + 1)
+                if buf.value.strip():
+                    found.append(buf.value.strip())
+        return True
+
+    u32.EnumWindows(visit, 0)
+    return found
 
 
 # -- the loop --------------------------------------------------------------
