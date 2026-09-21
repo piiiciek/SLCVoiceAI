@@ -69,6 +69,36 @@ STATUS_STATES = {
 #: config takes them lowercase; nobody writes "gemini" in a sentence.
 AI_NAMES = {"gemini": "Gemini", "claude": "Claude"}
 
+#: Where the tip jar lives. The button in the title bar is drawn by
+#: hand rather than by the script buymeacoffee.com hands out: that script
+#: arrives over the network before the page can finish parsing, ends in
+#: document.write - which blanks a page that has already parsed - and
+#: would be running with the whole Python bridge in reach.
+COFFEE_URL = "https://buymeacoffee.com/piciek"
+
+
+def links() -> dict[str, str]:
+    """Pages the panel is allowed to send someone to.
+
+    Named rather than passed as a URL. The page asks for "coffee" and this
+    file decides what that means, so nothing on the page can point the
+    browser somewhere this module has not already agreed to.
+    """
+    from . import update
+
+    return {"repository": update.RELEASES_URL, "coffee": COFFEE_URL}
+
+
+def without_scheme(url: str) -> str:
+    """github.com/piiiciek/SLCVoiceAI, not https://github.com/...
+
+    The hover card has room for one and not the other, and showing the
+    address at all is the point: it is how someone decides whether to
+    click it.
+    """
+    return url.split("://", 1)[-1]
+
+
 _I18N_ATTR = re.compile(r'data-i18n(?:-[a-z-]+)?="([^"]+)"')
 _I18N_SAY = re.compile(r'\bsay\(\s*"([a-z][a-z0-9_.]+)"\s*\)')
 
@@ -191,8 +221,8 @@ class Api:
         self._app.try_phrase(str(said))
 
     @_guard
-    def open_repository(self) -> None:
-        self._app.open_repository()
+    def open_link(self, name: str) -> None:
+        self._app.open_link(str(name))
 
     @_guard
     def set_auto_start(self, on: bool) -> None:
@@ -305,6 +335,7 @@ class App:
             self._ready.set()
         return {
             "version": _running_version(),
+            "repo": without_scheme(links()["repository"]),
             "phrases": self.phrases(),
             "languages": sorted(i18n.available().items()),
             "language": i18n.current(),
@@ -404,14 +435,18 @@ class App:
         self._write(t("update.feed", new=version, old=_running_version(),
                       url=update.RELEASES_URL), "ok")
 
-    def open_repository(self) -> None:
+    def open_link(self, name: str) -> None:
         import webbrowser
 
-        from . import update
+        url = links().get(name)
+        if url is None:
+            log.warning("The panel asked to open %r, which is not one of %s",
+                        name, sorted(links()))
+            return
         try:
-            webbrowser.open(update.RELEASES_URL)
+            webbrowser.open(url)
         except Exception as exc:  # pragma: no cover - browser is the OS's
-            log.warning("Could not open %s: %s", update.RELEASES_URL, exc)
+            log.warning("Could not open %s: %s", url, exc)
 
     # -- reading SLC on demand ----------------------------------------------
     def _scan_in_background(self, then) -> None:

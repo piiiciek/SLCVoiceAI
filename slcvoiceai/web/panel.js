@@ -119,6 +119,7 @@
 
     controls: function (state) {
       $("version").textContent = state.version;
+      $("about-repo").textContent = state.repo;
       $("dry").checked = !!state.dry;
       $("auto").checked = !!state.auto;
       $("auto-launch").checked = !!state.launch;
@@ -214,7 +215,18 @@
   });
 
   $("update").addEventListener("click", function () {
-    ask("open_repository");
+    ask("open_link", "repository");
+  });
+
+  // Both of these leave the program. Python opens them in the real
+  // browser: following a link in here would replace the panel with a web
+  // page, in a window with no address bar and no way back.
+  $("coffee").addEventListener("click", function () {
+    ask("open_link", "coffee");
+  });
+
+  $("about-repo").addEventListener("click", function () {
+    ask("open_link", "repository");
   });
 
   /* ---------- hotkeys ---------------------------------------------------

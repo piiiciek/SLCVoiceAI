@@ -18,15 +18,51 @@
 -->
 
 <header class="titlebar">
-  <span class="mark" aria-hidden="true">
-    <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
-  </span>
-  <span class="wordmark">SLCVoiceAI</span>
+  <!-- A headset, because that is what this program is: the pilot talking
+       to the cabin. The mic tip is the same green the status card turns
+       while listening. -->
+  <div class="brand">
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path class="band" d="M5 11.8V9.4a7 7 0 0 1 14 0v2.4"/>
+        <rect class="ear" x="2.6" y="9.4" width="4.8" height="7.7" rx="2.4"/>
+        <rect class="ear" x="16.6" y="9.4" width="4.8" height="7.7" rx="2.4"/>
+        <path class="boom" d="M19 17.3v1.1a2.7 2.7 0 0 1-2.7 2.7h-4.2"/>
+        <circle class="mic" cx="11.3" cy="21.1" r="1.7"/>
+      </svg>
+    </span>
+    <span class="wordmark">SLC<b>Voice</b>AI</span>
+  </div>
+
+  <!-- Not the script buymeacoffee.com hands out: that one is 60px tall,
+       arrives over the network, and calls document.write - which blanks
+       a page that has finished parsing. This is the same button, drawn
+       here, opening the same page in the real browser. -->
+  <button class="coffee" id="coffee" data-i18n-title="coffee.title">
+    <svg class="mug" viewBox="0 0 24 24" aria-hidden="true">
+      <path class="steam" d="M7.2 5.6c-1-1.1.5-2 0-3.1M11 5.6c-1-1.1.5-2 0-3.1M14.8 5.6c-1-1.1.5-2 0-3.1"/>
+      <path class="pot" d="M3.4 8.6h12.2v6.6a5 5 0 0 1-5 5h-2.2a5 5 0 0 1-5-5z"/>
+      <path class="handle" d="M15.9 10.4h2a2.8 2.8 0 0 1 0 5.6h-2"/>
+    </svg>
+    <span data-i18n="coffee.text"></span>
+  </button>
+
   <!-- Language sits here rather than among the controls: it is set once
        and then never touched, unlike the things in the Controls card,
        which are tuned during a flight. -->
   <div class="titlebar-right">
-    <span class="version" id="version"></span>
+    <!-- Hovering the version says who wrote this and where it lives. The
+         card is a child of the anchor so that reaching down to the link
+         still counts as hovering; the stylesheet bridges the few pixels
+         in between, which the mouse would otherwise cross with nothing
+         under it. -->
+    <div class="about-anchor">
+      <span class="version" id="version" tabindex="0"></span>
+      <div class="about" role="tooltip">
+        <span class="author" data-i18n="about.author"></span>
+        <button class="about-link" id="about-repo"></button>
+      </div>
+    </div>
     <select id="lang" class="lang-select" data-i18n-title="control.language"></select>
   </div>
 </header>

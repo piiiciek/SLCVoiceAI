@@ -295,6 +295,12 @@ The **"try a phrase"** box runs the whole matching chain on typed text — no
 microphone, no flight needed. Useful for working out why a command missed, and
 for testing on the ground.
 
+Hovering the version number in the corner says who wrote this and links to the
+repository; the button in the middle of the title bar opens the tip jar. Both
+open in your own browser, never in this window — it has no address bar to find
+your way back from. Nothing on the page is fetched over the network, so the
+panel opens the same with the connection pulled out.
+
 ### Hotkeys: three calls straight from the keyboard
 
 Some things do not need saying. An Airbus rings the cabin and the ground crew

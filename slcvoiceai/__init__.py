@@ -6,4 +6,4 @@
 #: date: 260918 < 260919 < 261001 < 270101. Two releases in one day take a
 #: suffix, 260918.1. update.py reads this same line out of GitHub to work
 #: out whether a copy is behind, so keep it a plain literal.
-__version__ = "260922.1"
+__version__ = "260922.2"

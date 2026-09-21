@@ -243,3 +243,81 @@ def test_the_feed_is_written_as_text_not_markup():
     code = re.sub(r"/\*.*?\*/|//[^\n]*", "", SCRIPT, flags=re.S)
     assert "innerHTML" not in code, (
         "panel.js uses innerHTML somewhere; the feed must go in as text")
+
+
+# -- leaving the program ---------------------------------------------------
+
+def links_the_page_asks_for() -> set[str]:
+    return set(re.findall(r'ask\("open_link",\s*"(\w+)"', SCRIPT))
+
+
+def test_the_page_only_asks_for_links_this_file_knows():
+    """The page names a destination and gui.py decides what it means. A
+    name nobody here has heard of is a button that does nothing, silently,
+    the way a rejected promise always does."""
+    asked = links_the_page_asks_for()
+    assert asked, "nothing on the page opens a link - did the call change?"
+    unknown = sorted(asked - set(gui.links()))
+    assert not unknown, "the page asks for links that do not exist: " + str(unknown)
+
+
+def test_every_link_is_reachable_from_the_page():
+    """The other direction, as with Api: a destination nothing can reach
+    is a URL sitting in the source for no reason."""
+    assert set(gui.links()) == links_the_page_asks_for()
+
+
+@pytest.mark.parametrize("name", ["repository", "coffee"])
+def test_a_known_name_opens_its_page(monkeypatch, name):
+    import webbrowser
+
+    from slcvoiceai import config as config_module
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    gui.App(config_module.Config()).open_link(name)
+    assert opened == [gui.links()[name]]
+
+
+@pytest.mark.parametrize("name", ["https://example.invalid", "nonsense", ""])
+def test_an_unknown_name_opens_nothing(monkeypatch, name):
+    """Why the page passes a name and not a URL. This window has no
+    address bar to notice with, so the one place that decides where the
+    browser is sent is here."""
+    import webbrowser
+
+    from slcvoiceai import config as config_module
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    gui.App(config_module.Config()).open_link(name)
+    assert opened == []
+
+
+def test_the_address_on_the_card_is_the_address_it_opens():
+    """The hover card shows where the link goes, which is how someone
+    decides whether to click it. Written out twice it would drift."""
+    url = gui.links()["repository"]
+    shown = gui.without_scheme(url)
+    assert shown and shown in url
+    assert not shown.startswith("http")
+
+
+def test_the_tip_jar_is_the_one_the_button_was_made_for():
+    assert gui.COFFEE_URL.rstrip("/").endswith("/piciek")
+
+
+def test_the_panel_needs_nothing_from_the_network():
+    """It opens on a machine about to fly a simulator, sometimes with no
+    connection at all, and the window is drawn before anything else can
+    happen. A stylesheet or a script fetched from a CDN is a panel that
+    opens blank until the request gives up - which is the whole reason the
+    coffee button is drawn here rather than by the script its owners hand
+    out."""
+    css = (WEB / "panel.css").read_text(encoding="utf-8")
+    loaded = (re.findall(r'\b(?:src|href)\s*=\s*"([^"]+)"', MARKUP)
+              + re.findall(r'url\(\s*["\']?([^)"\']+)', css)
+              + re.findall(r'@import\s+["\']([^"\']+)', css))
+    assert loaded, "the page loads nothing at all - did the markup change?"
+    remote = [ref for ref in loaded if "//" in ref]
+    assert not remote, "the panel would wait on the network for " + str(remote)

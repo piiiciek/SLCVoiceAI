@@ -51,17 +51,79 @@ body {
   border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
 }
-.mark {
-  width: 22px; height: 22px; flex-shrink: 0;
-  display: grid; place-items: center;
-  border-radius: 6px;
-  background: rgba(79, 163, 255, .14);
-  border: 1px solid rgba(79, 163, 255, .32);
+/* The two side blocks share the leftover space equally, which is what
+   puts the coffee button in the middle of the bar rather than merely
+   between whatever the sides happen to be. Narrowing the window shrinks
+   the sides instead of sliding anything under anything else. */
+.brand {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
-.mark svg { width: 13px; height: 13px; fill: var(--accent); }
-.wordmark { font-size: 13px; font-weight: 650; letter-spacing: .2px; }
+.mark {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #3d86e8, #1d4fa8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .45),
+              inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+.mark svg { width: 16px; height: 16px; }
+.mark .band, .mark .boom {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+}
+.mark .band { stroke-width: 2.1; }
+.mark .boom { stroke-width: 1.8; }
+.mark .ear { fill: #fff; }
+.mark .mic { fill: var(--ok); }
+
+.wordmark {
+  font-size: 13px; font-weight: 650; letter-spacing: .2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wordmark b { color: var(--accent); font-weight: 650; }
+
+/* ---------- coffee ----------
+   Their colours, our proportions: the official button is 60px tall and
+   would own the title bar. */
+.coffee {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  background: #5f7fff;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font: 600 11.5px var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  transition: filter .15s, transform .05s;
+}
+.coffee:hover { filter: brightness(1.12); }
+.coffee:active { transform: translateY(1px); }
+.mug { width: 15px; height: 15px; flex-shrink: 0; }
+.mug .pot { fill: #ffdd00; }
+.mug .handle, .mug .steam {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.mug .steam { opacity: .8; }
+
 .titlebar-right {
-  margin-left: auto;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -74,7 +136,57 @@ body {
   border: 1px solid var(--card-line);
   border-radius: 999px;
   padding: 2px 8px;
+  outline: none;
 }
+.about-anchor:hover .version, .version:focus { color: var(--fg); }
+
+/* ---------- who wrote this ----------
+   Shown on hover, and it has to survive the mouse travelling down to the
+   link: the card is a descendant of the anchor, so hovering it keeps the
+   anchor hovered, and ::after fills the gap the mouse crosses on the way.
+
+   That strip is the width of the version badge and no wider. It was the
+   width of the card to begin with, which reached across the title bar and
+   quietly swallowed clicks on the coffee button whenever the card was
+   open. It is also exactly as tall as the gap, so it stops where the
+   language picker starts. */
+.about-anchor { position: relative; }
+.about-anchor::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: 4px;
+}
+.about {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 11px;
+  background: #1b232e;
+  border: 1px solid var(--card-line);
+  border-radius: 8px;
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .55);
+  white-space: nowrap;
+}
+.about-anchor:hover .about,
+.about-anchor:focus-within .about { display: flex; }
+.about .author { font-size: 11.5px; color: var(--fg); }
+.about-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 10.5px var(--mono);
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.about-link:hover { filter: brightness(1.2); }
 /* Quieter than the controls in the cards below, because it is a setting
    rather than something tuned mid-flight. */
 .lang-select {

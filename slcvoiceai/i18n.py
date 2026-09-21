@@ -126,6 +126,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "update.banner": "SLCVoiceAI {new} is available - you have {old}",
         "update.open": "open GitHub",
         "update.feed": "-- version {new} is on GitHub; this is {old}  ({url})",
+        # -- the title bar. "Piciek" is a name and stays one in every
+        # language; only the word in front of it is translated.
+        "about.author": "Written by Piciek",
+        "coffee.text": "Buy me a coffee",
+        "coffee.title": "opens buymeacoffee.com in your browser",
     },
     "pl": {
         "status.stopped": "Zatrzymany",
@@ -201,6 +206,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "update.banner": "SLCVoiceAI {new} jest dostępny - masz {old}",
         "update.open": "otwórz GitHuba",
         "update.feed": "-- wersja {new} jest na GitHubie; ta to {old}  ({url})",
+        "about.author": "Twórca: Piciek",
+        "coffee.text": "Kopsniesz kawę?",
+        "coffee.title": "otwiera buymeacoffee.com w przeglądarce",
     },
 }
 
