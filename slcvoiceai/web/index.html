@@ -37,15 +37,24 @@
   <span class="go" data-i18n="update.open"></span>
 </div>
 
-<!-- Between the name and the status, because it decides whether the pilot
-     ever has to look at the status card at all. -->
-<label class="autostart">
-  <input type="checkbox" id="auto">
-  <span class="autostart-text">
-    <span data-i18n="control.auto_start"></span>
-    <small data-i18n="control.auto_start_hint"></small>
-  </span>
-</label>
+<!-- Between the name and the status, because between them they decide
+     whether the pilot ever has to look at the status card at all. -->
+<div class="autostart">
+  <label>
+    <input type="checkbox" id="auto-launch">
+    <span class="autostart-text">
+      <span data-i18n="control.auto_launch"></span>
+      <small data-i18n="control.auto_launch_hint"></small>
+    </span>
+  </label>
+  <label>
+    <input type="checkbox" id="auto">
+    <span class="autostart-text">
+      <span data-i18n="control.auto_start"></span>
+      <small data-i18n="control.auto_start_hint"></small>
+    </span>
+  </label>
+</div>
 
 <main class="body">
 

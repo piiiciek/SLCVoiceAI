@@ -38,16 +38,20 @@ import os
 import subprocess
 import sys
 import time
-import winreg
 from ctypes import wintypes
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# The one import from the package, and a deliberate one: the registry
+# value has to be written the same way whether the pilot ticks the box in
+# the panel or runs --install here. slcvoiceai.autostart pulls in nothing
+# but winreg, so this stays as cheap as the rest of the file.
+from slcvoiceai import autostart  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "SLCVoiceAI.bat"
-PYTHONW = ROOT / ".venv" / "Scripts" / "pythonw.exe"
-
-RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-RUN_NAME = "SLCVoiceAI Watcher"
+PYTHONW = autostart.PYTHONW
 
 #: The panel's own window title, which is how we tell it is already up.
 PANEL_TITLE = "SLCVoiceAI"
@@ -186,9 +190,8 @@ def watch(process_name: str, every: float, settle: float, once: bool) -> int:
 
 # -- installing ------------------------------------------------------------
 
-def command() -> str:
-    runner = PYTHONW if PYTHONW.is_file() else Path(sys.executable)
-    return '"{r}" "{s}"'.format(r=runner, s=Path(__file__).resolve())
+command = autostart.command
+installed = autostart.installed
 
 
 def install() -> int:
@@ -196,9 +199,7 @@ def install() -> int:
         print("Warning: {p} is missing, so this will use {s} instead and a "
               "console window may appear at login.".format(p=PYTHONW,
                                                            s=sys.executable))
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
-                        winreg.KEY_SET_VALUE) as key:
-        winreg.SetValueEx(key, RUN_NAME, 0, winreg.REG_SZ, command())
+    autostart.install()
     print("Installed. From the next login, SLCVoiceAI starts when SLC does.")
     print("  " + command())
     print("Remove it with:  python tools/watch_for_slc.py --uninstall")
@@ -206,23 +207,12 @@ def install() -> int:
 
 
 def uninstall() -> int:
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
-                            winreg.KEY_SET_VALUE) as key:
-            winreg.DeleteValue(key, RUN_NAME)
-    except FileNotFoundError:
+    if installed() is None:
         print("It was not installed; nothing to remove.")
         return 0
+    autostart.uninstall()
     print("Removed. Nothing starts at login any more.")
     return 0
-
-
-def installed() -> str | None:
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-            return winreg.QueryValueEx(key, RUN_NAME)[0]
-    except FileNotFoundError:
-        return None
 
 
 def status(process_name: str) -> int:

@@ -121,6 +121,7 @@
       $("version").textContent = state.version;
       $("dry").checked = !!state.dry;
       $("auto").checked = !!state.auto;
+      $("auto-launch").checked = !!state.launch;
       $("conf").value = state.confidence;
       $("conf-out").textContent = Number(state.confidence).toFixed(2);
 
@@ -168,6 +169,17 @@
 
   $("auto").addEventListener("change", function (event) {
     ask("set_auto_start", event.target.checked);
+  });
+
+  // Writing to the registry can fail, so this one is not fire-and-forget:
+  // the box has to end up showing what is actually registered.
+  $("auto-launch").addEventListener("change", function (event) {
+    if (!api) return;
+    api.set_auto_launch(event.target.checked).then(function (on) {
+      $("auto-launch").checked = !!on;
+    }).catch(function (err) {
+      console.error("set_auto_launch", err);
+    });
   });
 
   // The readout follows the thumb; the bridge is told when it is let go.

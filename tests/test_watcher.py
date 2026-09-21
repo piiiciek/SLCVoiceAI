@@ -23,6 +23,9 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import watch_for_slc as watcher  # noqa: E402
 
+sys.path.insert(0, str(ROOT))
+from slcvoiceai import autostart  # noqa: E402
+
 
 class Enough(Exception):
     """Raised from the patched sleep to end the loop."""
@@ -185,7 +188,9 @@ def scratch_key(monkeypatch):
     """
     parent = r"Software\SLCVoiceAI-tests"
     path = parent + r"\run"
-    monkeypatch.setattr(watcher, "RUN_KEY", path)
+    # Both names: the tool delegates to the package, so patching
+    # only one of them would write to the real Run key.
+    monkeypatch.setattr(autostart, "RUN_KEY", path)
     winreg.CreateKey(winreg.HKEY_CURRENT_USER, path)
     yield path
     # Both levels: leaving the parent behind is a suite that litters the
@@ -232,8 +237,57 @@ def test_it_launches_the_same_thing_a_double_click_would():
 def test_it_costs_nothing_to_import():
     """It runs from login to shutdown. Importing the bridge here would
     load hundreds of megabytes to answer a question ctypes answers in a
-    millisecond."""
-    source = (ROOT / "tools" / "watch_for_slc.py").read_text(encoding="utf-8")
-    for heavy in ("import numpy", "import webview", "uiautomation",
-                  "faster_whisper", "from slcvoiceai"):
-        assert heavy not in source, "the watcher imports " + heavy
+    millisecond.
+
+    slcvoiceai.autostart is the one exception, and pulls in winreg alone -
+    the registry value has to be written the same way whether it is the
+    tick box in the panel or --install here.
+    """
+    assert _heavy_imports(ROOT / "tools" / "watch_for_slc.py") == []
+
+
+def test_the_shared_module_stays_cheap():
+    """What the exception above depends on."""
+    assert _heavy_imports(ROOT / "slcvoiceai" / "autostart.py") == []
+
+
+#: Names that mean megabytes. slcvoiceai.autostart is not among them: it
+#: imports winreg and nothing else, which is the whole reason it exists.
+HEAVY = ("numpy", "webview", "uiautomation", "faster_whisper", "sounddevice",
+         "pynput", "rapidfuzz", "torch")
+
+
+def _heavy_imports(path: Path) -> list[str]:
+    """Modules a file really imports, read as code rather than as text.
+
+    Searching the source for "import numpy" also finds it in a comment
+    explaining why numpy is not imported - which is how this test first
+    failed, on a docstring it was written to protect.
+    """
+    import ast
+
+    found = []
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        names = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            names = [node.module or ""]
+        for name in names:
+            root = name.split(".")[0]
+            if root in HEAVY or name.startswith(("slcvoiceai.gui",
+                                                 "slcvoiceai.stt",
+                                                 "slcvoiceai.app")):
+                found.append(name)
+    return found
+
+
+def test_the_panel_and_the_tool_register_the_same_thing():
+    """Two ways to switch this on - the tick box and --install - and one
+    of them writing a different value would leave the box showing the
+    wrong state, or two entries fighting."""
+    from slcvoiceai import autostart
+
+    assert watcher.command() == autostart.command()
+    assert watcher.installed is autostart.installed

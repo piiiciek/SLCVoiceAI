@@ -85,9 +85,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
                                "more often it does nothing - slower, but "
                                "surer."),
         "control.language": "language",
-        "control.auto_start": "Start listening when SLC opens",
-        "control.auto_start_hint": ("the panel has to be open for this - it "
-                                    "waits without loading anything"),
+        "control.auto_start": "Automatic listening",
+        "control.auto_start_hint": ("listening switches on by itself once SLC "
+                                    "is running"),
+        "control.auto_launch": "Start SLCVoiceAI with SLC",
+        "control.auto_launch_hint": ("this window opens by itself after SLC "
+                                     "does, even if it was closed"),
         # The example stays in English in every language: it is what you
         # would say to SLC, and SLC's buttons are English.
         "test.placeholder": "e.g. cabin crew, prepare for landing",
@@ -112,7 +115,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     declined: {reason}",
         "feed.save_failed": "-- could not save that to config.toml: {error}",
         "feed.hotkeys": "-- keys: {what}",
-        "feed.auto_start": "-- start with SLC {state}",
+        "feed.auto_start": "-- automatic listening {state}",
+        "feed.auto_launch": "-- starting with SLC {state}",
+        "feed.auto_launch_failed": "-- could not change that: {error}",
         "feed.slc_appeared": "-- SLC is up; starting on its own",
         "feed.pass": "PASS",
         "feed.below_floor": "below floor",
@@ -159,9 +164,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
                                "wyżej, tym częściej nie robi nic — wolniej, "
                                "ale pewniej."),
         "control.language": "język",
-        "control.auto_start": "Zacznij nasłuchiwać, gdy ruszy SLC",
-        "control.auto_start_hint": ("panel musi być otwarty — czeka, nic nie "
-                                    "wczytując"),
+        "control.auto_start": "Automatyczny nasłuch",
+        "control.auto_start_hint": ("gdy SLC będzie działał, automatycznie "
+                                    "nasłuch zostanie włączony"),
+        "control.auto_launch": "Uruchamiaj SLCVoiceAI razem z SLC",
+        "control.auto_launch_hint": ("to okno podniesie się samo po starcie "
+                                     "SLC, nawet jeśli było zamknięte"),
         "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
         "test.hint": ("Przepuszcza wpisany tekst przez całe dopasowanie i "
@@ -183,7 +191,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     odmowa: {reason}",
         "feed.save_failed": "-- nie udało się zapisać tego do config.toml: {error}",
         "feed.hotkeys": "-- klawisze: {what}",
-        "feed.auto_start": "-- start razem z SLC {state}",
+        "feed.auto_start": "-- automatyczny nasłuch {state}",
+        "feed.auto_launch": "-- uruchamianie razem z SLC {state}",
+        "feed.auto_launch_failed": "-- nie udało się tego zmienić: {error}",
         "feed.slc_appeared": "-- SLC wstał; uruchamiam się sam",
         "feed.pass": "PRZECHODZI",
         "feed.below_floor": "poniżej progu",

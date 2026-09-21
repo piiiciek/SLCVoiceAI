@@ -19,3 +19,8 @@ env/
 .idea/
 Thumbs.db
 desktop.ini
+
+# uiautomation drops this next to whatever imported it, usually when COM
+# was not initialised on the calling thread - which the test suite does
+# every run. It is a symptom, not a source file.
+@AutomationLog.txt

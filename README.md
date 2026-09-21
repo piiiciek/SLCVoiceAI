@@ -351,8 +351,9 @@ Two different things, and it is worth knowing which one you want.
 **"Start listening when SLC opens"** at the top of the panel. It waits with
 nothing loaded — no speech model, no VRAM — until SLC turns up.
 
-**The panel is not open, and should launch itself.** That needs something
-running to notice, so there is a watcher:
+**The panel is not open, and should launch itself.** Tick **"Start SLCVoiceAI
+with SLC"**, the box above it. That registers a small watcher to run at every
+Windows login; the same thing from a terminal, if you prefer:
 
 ```bash
 python tools/watch_for_slc.py --install

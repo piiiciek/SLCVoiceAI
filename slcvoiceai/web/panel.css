@@ -111,15 +111,20 @@ body {
    deliberately or just leaves it running. */
 .autostart {
   display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 9px 14px;
+  flex-direction: column;
+  padding: 4px 0;
   background: rgba(255, 255, 255, .025);
   border-bottom: 1px solid var(--card-line);
-  cursor: pointer;
   flex-shrink: 0;
 }
-.autostart:hover { background: rgba(255, 255, 255, .05); }
+.autostart label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.autostart label:hover { background: rgba(255, 255, 255, .05); }
 .autostart input {
   width: 15px; height: 15px;
   margin-top: 1px;

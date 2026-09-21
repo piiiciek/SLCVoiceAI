@@ -199,6 +199,10 @@ class Api:
         self._app.set_auto_start(bool(on))
 
     @_guard
+    def set_auto_launch(self, on: bool) -> bool:
+        return self._app.set_auto_launch(bool(on))
+
+    @_guard
     def set_binding(self, action: str, event: dict) -> dict:
         return self._app.set_binding(str(action), event or {})
 
@@ -306,6 +310,7 @@ class App:
             "language": i18n.current(),
             "dry": bool(self.cfg.behaviour.dry_run),
             "auto": bool(self.cfg.behaviour.start_with_slc),
+            "launch": self._launches_with_slc(),
             "confidence": float(self.cfg.behaviour.min_confidence),
             "status": {"text": t(self._status_key),
                        "state": STATUS_STATES[self._status_key]},
@@ -474,6 +479,42 @@ class App:
             # Switched on with SLC already up, the pilot means now, not the
             # next time they remember to launch it.
             self._maybe_auto_start()
+
+    def _launches_with_slc(self) -> bool:
+        """Is the login entry there? Never let this stop the panel opening."""
+        from . import autostart
+
+        try:
+            return autostart.is_installed()
+        except Exception:
+            log.debug("Could not read the login entry", exc_info=True)
+            return False
+
+    def set_auto_launch(self, on: bool) -> bool:
+        """Have Windows start the SLC watcher at login, or stop it.
+
+        Returns what is actually registered afterwards, not what was
+        asked for. The registry can refuse, and a tick box showing a
+        setting that did not take is worse than no tick box.
+
+        This lives outside config.toml on purpose: it is a Windows
+        setting, and copying the folder to another machine should not
+        bring an autostart entry with it.
+        """
+        from . import autostart
+
+        try:
+            autostart.set_installed(on)
+        except Exception as exc:
+            log.warning("Could not change the login entry: %s", exc)
+            self._write(t("feed.auto_launch_failed", error=exc), "warn")
+            return autostart.is_installed()
+
+        now = autostart.is_installed()
+        self._write(t("feed.auto_launch",
+                      state=t("feed.dry_on") if now else t("feed.dry_off")),
+                    "accent")
+        return now
 
     def _watch_for_slc(self) -> None:
         """Arm the bridge when SLC appears, if that was asked for.
