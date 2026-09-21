@@ -120,6 +120,7 @@
     controls: function (state) {
       $("version").textContent = state.version;
       $("dry").checked = !!state.dry;
+      $("auto").checked = !!state.auto;
       $("conf").value = state.confidence;
       $("conf-out").textContent = Number(state.confidence).toFixed(2);
 
@@ -163,6 +164,10 @@
 
   $("dry").addEventListener("change", function (event) {
     ask("set_dry", event.target.checked);
+  });
+
+  $("auto").addEventListener("change", function (event) {
+    ask("set_auto_start", event.target.checked);
   });
 
   // The readout follows the thumb; the bridge is told when it is let go.

@@ -105,6 +105,32 @@ body {
 .update:hover { background: #1a2f20; }
 .update .go { margin-left: auto; opacity: .75; }
 
+/* ---------- start with SLC ----------
+   Its own strip under the name rather than a line in the Controls card:
+   it is the one setting that decides whether the pilot opens this window
+   deliberately or just leaves it running. */
+.autostart {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, .025);
+  border-bottom: 1px solid var(--card-line);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.autostart:hover { background: rgba(255, 255, 255, .05); }
+.autostart input {
+  width: 15px; height: 15px;
+  margin-top: 1px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.autostart-text { display: flex; flex-direction: column; gap: 1px; }
+.autostart-text > span { font-size: 12px; }
+.autostart-text small { color: var(--muted); font-size: 10.5px; }
+
 /* ---------- scrolling body ---------- */
 .body {
   flex: 1;

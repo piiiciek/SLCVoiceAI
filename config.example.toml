@@ -170,6 +170,16 @@ check_for_updates = true
 # true = decide and log, but never actually press anything. Start here.
 dry_run = false
 
+# Start listening by itself once SLC appears, so the panel can be left open
+# and forgotten. There is a tick box for this at the top of the panel.
+#
+# The panel has to be running to notice - nothing here launches it - and it
+# sits idle with no speech model loaded until SLC actually shows up. Note
+# that this means Whisper loads AFTER the simulator, which is when the
+# graphics card has least to spare; if commands start taking many seconds,
+# that is why, and starting the panel first is the cure.
+start_with_slc = false
+
 log_file = "slcvoiceai.log"
 
 [ui]

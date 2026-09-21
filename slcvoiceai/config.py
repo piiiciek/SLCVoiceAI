@@ -125,6 +125,12 @@ class BehaviourConfig:
     #: and say so. Nothing downloads or replaces itself either way.
     check_for_updates: bool = True
 
+    #: Start listening by itself once SLC appears, so the panel can be left
+    #: open and forgotten. The panel has to be running to notice - nothing
+    #: here launches it - and it stays idle, with no speech model loaded,
+    #: until SLC actually shows up.
+    start_with_slc: bool = False
+
     log_file: str = "slcvoiceai.log"
 
 

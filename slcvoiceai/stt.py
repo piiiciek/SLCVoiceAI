@@ -213,6 +213,36 @@ class Transcriber:
             vad_filter=True,
         )
         text = " ".join(seg.text.strip() for seg in segments).strip()
-        log.info("Transcribed in %.2fs [%s]: %r",
-                 time.time() - started, info.language, text)
+        took = time.time() - started
+        log.info("Transcribed in %.2fs [%s]: %r", took, info.language, text)
+        self._report_if_stalled(took, len(audio))
         return text, info.language
+
+    #: A transcription is normally a fraction of the clip it decodes - the
+    #: median across a logged flight is 0.99s. Past these, something took
+    #: the GPU away: 52s to decode 1.17s of speech, then 0.55s for the next
+    #: one, which is contention and not a slow model.
+    _STALL_FACTOR = 8
+    _STALL_FLOOR = 6.0
+    #: Whisper decodes at 16 kHz whatever the microphone ran at, and the
+    #: capture side has already resampled by the time a clip arrives here.
+    _RATE = 16000
+
+    def _report_if_stalled(self, took: float, frames: int) -> None:
+        """Say why a command vanished, where the pilot will read it.
+
+        Without this the panel shows "Transcribed in 52.40s" and then
+        "Ignoring ... past the 12s limit", and nothing connects either line
+        to the simulator having the graphics card. The command is gone
+        either way; knowing why is the difference between changing a
+        setting and repeating the phrase into a machine that cannot hear.
+        """
+        seconds = frames / float(self._RATE)
+        if took < max(self._STALL_FLOOR, seconds * self._STALL_FACTOR):
+            return
+        log.warning(
+            "That took %.0fs to decode %.1fs of audio - %.0f times longer "
+            "than it should. Whisper is on %s and something else is using "
+            "it, almost always the simulator. Start SLCVoiceAI before the "
+            "simulator, or set [stt] device = \"cpu\" to be unaffected by "
+            "it.", took, seconds, took / max(seconds, 0.1), self._device)

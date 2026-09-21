@@ -85,6 +85,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
                                "more often it does nothing - slower, but "
                                "surer."),
         "control.language": "language",
+        "control.auto_start": "Start listening when SLC opens",
+        "control.auto_start_hint": ("the panel has to be open for this - it "
+                                    "waits without loading anything"),
         # The example stays in English in every language: it is what you
         # would say to SLC, and SLC's buttons are English.
         "test.placeholder": "e.g. cabin crew, prepare for landing",
@@ -109,6 +112,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     declined: {reason}",
         "feed.save_failed": "-- could not save that to config.toml: {error}",
         "feed.hotkeys": "-- keys: {what}",
+        "feed.auto_start": "-- start with SLC {state}",
+        "feed.slc_appeared": "-- SLC is up; starting on its own",
         "feed.pass": "PASS",
         "feed.below_floor": "below floor",
         "feed.language_changed": "-- interface language: {name}",
@@ -154,6 +159,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
                                "wyżej, tym częściej nie robi nic — wolniej, "
                                "ale pewniej."),
         "control.language": "język",
+        "control.auto_start": "Zacznij nasłuchiwać, gdy ruszy SLC",
+        "control.auto_start_hint": ("panel musi być otwarty — czeka, nic nie "
+                                    "wczytując"),
         "test.placeholder": "np. cabin crew, prepare for landing",
         "test.match": "Dopasuj",
         "test.hint": ("Przepuszcza wpisany tekst przez całe dopasowanie i "
@@ -175,6 +183,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "feed.declined": "     odmowa: {reason}",
         "feed.save_failed": "-- nie udało się zapisać tego do config.toml: {error}",
         "feed.hotkeys": "-- klawisze: {what}",
+        "feed.auto_start": "-- start razem z SLC {state}",
+        "feed.slc_appeared": "-- SLC wstał; uruchamiam się sam",
         "feed.pass": "PRZECHODZI",
         "feed.below_floor": "poniżej progu",
         "feed.language_changed": "-- język interfejsu: {name}",

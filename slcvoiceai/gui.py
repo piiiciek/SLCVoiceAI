@@ -41,6 +41,7 @@ import logging
 import queue
 import re
 import threading
+import time
 from pathlib import Path
 
 import webview
@@ -194,6 +195,10 @@ class Api:
         self._app.open_repository()
 
     @_guard
+    def set_auto_start(self, on: bool) -> None:
+        self._app.set_auto_start(bool(on))
+
+    @_guard
     def set_binding(self, action: str, event: dict) -> dict:
         return self._app.set_binding(str(action), event or {})
 
@@ -300,6 +305,7 @@ class App:
             "languages": sorted(i18n.available().items()),
             "language": i18n.current(),
             "dry": bool(self.cfg.behaviour.dry_run),
+            "auto": bool(self.cfg.behaviour.start_with_slc),
             "confidence": float(self.cfg.behaviour.min_confidence),
             "status": {"text": t(self._status_key),
                        "state": STATUS_STATES[self._status_key]},
@@ -458,6 +464,53 @@ class App:
                     "accent")
         self._remember("behaviour", "dry_run", on)
 
+    def set_auto_start(self, on: bool) -> None:
+        self.cfg.behaviour.start_with_slc = on
+        self._write(t("feed.auto_start",
+                      state=t("feed.dry_on") if on else t("feed.dry_off")),
+                    "accent")
+        self._remember("behaviour", "start_with_slc", on)
+        if on:
+            # Switched on with SLC already up, the pilot means now, not the
+            # next time they remember to launch it.
+            self._maybe_auto_start()
+
+    def _watch_for_slc(self) -> None:
+        """Arm the bridge when SLC appears, if that was asked for.
+
+        Polls rather than subscribing: finding SLC's windows costs about
+        five milliseconds, so once every few seconds is free - and there is
+        no Windows event for "a process started" that does not want
+        administrator rights and process auditing switched on.
+        """
+        def looking() -> bool:
+            # Every read, including the first. UI Automation is not always
+            # answering at the moment the panel opens, and letting that
+            # first one through uncaught killed the thread outright - the
+            # box stayed ticked and nothing ever watched again.
+            try:
+                return self.ui.is_running()
+            except Exception:
+                log.debug("Could not tell whether SLC is up", exc_info=True)
+                return False
+
+        seen = looking()
+        while not self._closing:
+            time.sleep(self.WATCH_SECONDS)
+            running = looking()
+            if running and not seen:
+                self._maybe_auto_start()
+            seen = running
+
+    def _maybe_auto_start(self) -> None:
+        """Start listening, if that is wanted and not already happening."""
+        if not self.cfg.behaviour.start_with_slc or self.bridge is not None:
+            return
+        if not self.ui.is_running():
+            return
+        self._write(t("feed.slc_appeared"), "accent")
+        self._start()
+
     def set_threshold(self, value: float) -> None:
         value = round(value, 2)
         self.cfg.behaviour.min_confidence = value
@@ -467,6 +520,11 @@ class App:
             if hasattr(router, "min_confidence"):
                 router.min_confidence = value
         self._remember("behaviour", "min_confidence", value)
+
+    #: How often to look for SLC when auto-start is armed. Long enough to
+    #: be invisible, short enough that the model is loading while the
+    #: pilot is still clicking through SLC's own menus.
+    WATCH_SECONDS = 4.0
 
     # -- hotkeys -----------------------------------------------------------
     def hotkey_rows(self) -> list[dict]:
@@ -690,7 +748,7 @@ class App:
         )
         self.window.events.closed += self._on_closed
 
-        for worker in (self._pump, self._drain_logs):
+        for worker in (self._pump, self._drain_logs, self._watch_for_slc):
             threading.Thread(target=worker, daemon=True).start()
         self._check_for_updates()
 
