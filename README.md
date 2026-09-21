@@ -343,6 +343,39 @@ Hotkeys obey `dry_run`, and they are held to the same flight guard as speech.
 Pressing one costs the same few seconds a spoken command does, because SLC has
 to be read either way.
 
+### Starting by itself
+
+Two different things, and it is worth knowing which one you want.
+
+**The panel is already open, and should start listening when SLC does.** Tick
+**"Start listening when SLC opens"** at the top of the panel. It waits with
+nothing loaded — no speech model, no VRAM — until SLC turns up.
+
+**The panel is not open, and should launch itself.** That needs something
+running to notice, so there is a watcher:
+
+```bash
+python tools/watch_for_slc.py --install
+```
+
+From the next login it sits in the background, and when `SLC.exe` appears it
+runs `SLCVoiceAI.bat` exactly as double-clicking would. It launches on the
+transition only: not again while SLC stays up, and not if the panel is already
+open — so closing the panel mid-session leaves it closed. `--uninstall` removes
+it, `--status` says what is installed and what is running, and nothing here
+needs administrator rights (it is one value under `HKCU\...\Run`).
+
+The watcher imports nothing but the standard library. It has to be cheap: it
+runs from login to shutdown, and asking ctypes whether a process exists costs
+about ten milliseconds every five seconds.
+
+**Worth knowing before you install it.** The panel loads Whisper when it
+starts, so starting it with SLC means starting it *after* the simulator — when
+the graphics card has least to spare. That is what pushes the model down to
+`small` and what makes the occasional command take tens of seconds. Launching
+the panel before the simulator is still the better habit; the watcher is for
+when you would rather not have to remember.
+
 ### Headless
 
 Always start in dry-run, which decides and logs but never presses anything:
@@ -431,6 +464,7 @@ tools/
   probe_cache.py  ways of reading the UIA tree, measured against each other
   close_slc.py    close SLC, answering its "are you sure?" dialog
   replay_log.py   replay a flight log against today's matcher
+  watch_for_slc.py launch the panel when SLC starts (--install)
   bump_version.py set __version__ to today (the pre-commit hook runs it)
   hooks/          git hooks: git config core.hooksPath tools/hooks
 tests/
@@ -446,6 +480,8 @@ tests/
   test_panel.py     what an activity line means, and the Python/page seam
   test_hotkeys.py   a bound key does one thing, or nothing
   test_overlap.py   same name, same place: which one can actually be clicked
+  test_autostart.py stalls get explained; the panel arms itself when SLC opens
+  test_watcher.py   launching the panel once, and not on top of itself
   test_config_save.py  writing a setting back without wrecking config.toml
   test_bump_version.py  the version never moves backwards
   test_config_keys.py  API keys: resolved, masked, never committed
