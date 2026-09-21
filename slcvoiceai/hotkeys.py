@@ -44,27 +44,21 @@ log = logging.getLogger(__name__)
 #: against. Nothing here is user-editable; the keys on the left are what
 #: config.toml and the panel talk about.
 #:
-#: WARNING - "back" is not trustworthy yet. Do not rely on it, and see
-#: the note below before shipping it.
-#:
-#: The flight logs appeared to show SLC offering one BACK at a time, which
-#: would have made a single binding correct for all three menus. That was
-#: an artefact: list_actions() drops same-named controls in the same
-#: window (slc_ui.py, `key = (win_name, name.lower())`), so three BACKs
-#: collapse into one in the log. A live probe of the real tree found
-#: THREE visible at once -
+#: "back" takes one binding for all three menus, but not for the reason it
+#: first appeared to. SLC lays out THREE BACK buttons at once -
 #:
 #:     cmdTannoySwitchBackGroundCrew   172x19 @ 13,1341
 #:     cmdTannoySwitchBackCabinCrew    172x19 @ 13,1341   <- same point
-#:     cmdTannoySwitchBackPassengers   172x19 @ 13,1324
+#:     cmdTannoySwitchBackPassengers   172x19 @ 13,1324   <- under GO AHEAD
 #:
-#: - all reporting a real rectangle, two of them at identical coordinates.
-#: The bounding rectangle says "laid out", not "on top", so it cannot tell
-#: which one the pilot can actually click, and whichever the walk reaches
-#: first is the one pressed. That is right only by luck.
+#: - all reporting a real rectangle. The logs showed one only because
+#: list_actions drops same-named controls in the same window; the tree has
+#: three. A rectangle means "laid out", not "on top", so picking whichever
+#: the walk reached first was right only by luck.
 #:
-#: Disambiguating needs something the rectangle does not give: hit-testing
-#: the point, so Windows says which control is topmost.
+#: slc_ui.is_topmost settles it by asking Windows what is at the point, so
+#: the list carries the BACK the pilot can actually click - which is the
+#: one belonging to the menu that is open. Hence one binding.
 ACTIONS: dict[str, tuple[str, ...]] = {
     "intercom": ("INTERCOM",),
     "ground": ("GROUND CREW",),

@@ -93,6 +93,11 @@ Three SLC quirks worth knowing if you extend this:
   Where the label is our guess rather than SLC's own name, the tooltip is the
   control's real description, so the denylist is checked against both.
 - **`IsOffscreen` is useless here** — it is `True` for everything, visible or not.
+- **A rectangle means "laid out", not "on top".** SLC stacks controls: the three
+  menus each have a `BACK` button, two of them at identical coordinates, and one
+  sits under a conversation's `GO AHEAD`. All report a real rectangle. Where two
+  controls share a name, `is_topmost()` asks Windows what is at the point and
+  keeps that one — the rectangle alone would pick by luck.
 
 Check it yourself at any time:
 
@@ -303,14 +308,15 @@ Three calls can be bound, and what each one presses is fixed:
 | `intercom` | call the cabin crew — the **ATT** button |
 | `ground` | call the ground crew — the **MECH** button |
 | `pa` | announcement to the passengers |
-| `back` | back out of a menu — **not reliable yet, see below** |
+| `back` | back out of whichever menu is open |
 
-**`back` is not finished.** SLC has three BACK buttons laid out at once — one per
-menu — and two of them sit at the same screen coordinates. The bounding rectangle
-the bridge filters on says "laid out", not "on top", so it cannot tell which one
-you can actually click, and the bridge presses whichever it reaches first. That
-is correct only by luck. Settling it needs hit-testing the point so Windows
-reports the topmost control; until then, leave `back` unbound.
+`back` takes one binding for all three menus. That needed work: SLC lays out
+**three** BACK buttons at once, one per menu, two of them at identical
+coordinates and a third underneath a conversation's GO AHEAD. All of them report
+a real rectangle, so the rectangle cannot say which one you can click. The bridge
+now asks Windows what is actually at the point and keeps that one — see
+`is_topmost` in `slcvoiceai/slc_ui.py`. It is asked only when two controls share
+a name, so it costs nothing on the common path.
 
 Set them in the panel: click a key in the **Keys bound to SLC buttons** card and
 press the combination you want. It is written to `config.toml` and armed on the
@@ -439,6 +445,7 @@ tests/
   test_i18n.py      translations stay complete and keep their placeholders
   test_panel.py     what an activity line means, and the Python/page seam
   test_hotkeys.py   a bound key does one thing, or nothing
+  test_overlap.py   same name, same place: which one can actually be clicked
   test_config_save.py  writing a setting back without wrecking config.toml
   test_bump_version.py  the version never moves backwards
   test_config_keys.py  API keys: resolved, masked, never committed

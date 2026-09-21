@@ -307,6 +307,60 @@ def is_visible(control) -> bool:
         return False
 
 
+def _identity(control):
+    """Enough of a control to recognise it again, or None."""
+    try:
+        rect = control.BoundingRectangle
+        box = (rect.left, rect.top, rect.right, rect.bottom)
+        return (control.ControlTypeName,
+                (control.AutomationId or "").strip(),
+                (control.Name or "").strip(), box)
+    except Exception:
+        return None
+
+
+def is_topmost(control) -> bool:
+    """Would a click at this control's middle actually reach it?
+
+    `is_visible` asks whether a control is laid out. That is not the same
+    as being on top, and SLC stacks controls: the three menus each have a
+    BACK button, two of them at identical coordinates, and one menu's BACK
+    sits under the GO AHEAD of a conversation. All of them report a real
+    rectangle; only one can be pressed.
+
+    Windows can settle it - ask what is at the point. Used only to break a
+    tie between two same-named controls, because it costs a COM call and
+    the answer only matters when the name alone is not enough.
+
+    False when it cannot tell, which includes SLC being covered by another
+    window. That is the safe direction: the caller then keeps whichever
+    control it already had, which is what it did before this existed.
+    """
+    mine = _identity(control)
+    if mine is None:
+        return False
+    try:
+        rect = control.BoundingRectangle
+        x = (rect.left + rect.right) // 2
+        y = (rect.top + rect.bottom) // 2
+        hit = auto.ControlFromPoint(x, y)
+    except Exception:
+        return False
+
+    # The hit lands on the innermost element under the cursor, which for
+    # an SLC button is the Text drawn inside it - so walk back up.
+    for _ in range(4):
+        if hit is None:
+            return False
+        if _identity(hit) == mine:
+            return True
+        try:
+            hit = hit.GetParentControl()
+        except Exception:
+            return False
+    return False
+
+
 def label_for(control) -> str:
     """Best human-readable label for a control: its name, else its id."""
     try:
@@ -415,7 +469,9 @@ class SlcUI:
         useful for exploring what SLC can do, never for routing a command.
         """
         actions: list[Action] = []
-        seen: set[tuple[str, str]] = set()
+        #: name -> [index into actions, is that one on top?]. The second
+        #: entry stays None until a collision makes it worth finding out.
+        seen: dict[tuple[str, str], list] = {}
 
         for win in self.windows():
             win_name = win.Name or "(untitled)"
@@ -453,11 +509,7 @@ class SlcUI:
                         log.debug("Skipping %r - its tooltip says %r",
                                   name, hint)
                         continue
-                    key = (win_name, name.lower())
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    actions.append(Action(
+                    action = Action(
                         name=name,
                         window=win_name,
                         control_type=ctl.ControlTypeName.replace("Control", ""),
@@ -465,7 +517,30 @@ class SlcUI:
                         enabled=enabled,
                         tooltip=hint,
                         _control=ctl,
-                    ))
+                    )
+                    key = (win_name, name.lower())
+                    if key not in seen:
+                        seen[key] = [len(actions), None]   # index, topmost?
+                        actions.append(action)
+                        continue
+
+                    # Two controls, one name, one window, both laid out.
+                    # SLC stacks the three menus' BACK buttons in the same
+                    # place; only one of them can be clicked. Which one is
+                    # a question the rectangle cannot answer, so it is only
+                    # asked when there is a collision - never on the common
+                    # path, where it would cost a COM call per control.
+                    slot = seen[key]
+                    if slot[1] is None:
+                        slot[1] = is_topmost(actions[slot[0]]._control)
+                    if slot[1]:
+                        continue                  # the kept one is on top
+                    if not is_topmost(ctl):
+                        continue                  # neither is; keep the first
+                    log.debug("Two %r in %s; taking the one on top (%s)",
+                              name, win_name, action.automation_id)
+                    actions[slot[0]] = action
+                    slot[1] = True
                 except Exception:
                     continue
         return actions

@@ -219,6 +219,6 @@ language = "auto"
 # end, page_up, page_down, scroll_lock, pause, f1-f20, num_lock, menu,
 # tab, esc, space, backspace, up, down, left, right.
 #
-# NOTE: "back" is not reliable yet. SLC lays out three BACK buttons at once,
-# one per menu, two of them at the same coordinates - and the rectangle the
-# bridge filters on cannot tell which is on top. Leave it unbound for now.
+# One binding covers backing out of all three menus. SLC lays out three BACK
+# buttons at once, but only one of them is on top at any moment, and the
+# bridge asks Windows which - so the key always presses the one you can see.
