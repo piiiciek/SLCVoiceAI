@@ -10,6 +10,23 @@ Run it while SLC is in a flight with the communications popup OPEN:
 Anything listed as [Button] with enabled=True can be driven by the bridge.
 If the popup shows up as an empty or nameless subtree, the buttons are
 custom-drawn without automation peers and we need the OCR fallback instead.
+
+Read BRIDGE-SEES first when chasing a button the bridge "was not offered".
+IsEnabled is True for every one of SLC's ~336 buttons whether or not it is
+on screen, so it tells you nothing; the bounding rectangle is what the
+bridge filters on. Three outcomes, three different problems:
+
+    button absent from the dump    SLC had not drawn it yet, or it lives
+                                   in a window this does not enumerate
+    present, BRIDGE-SEES=NO        it is there with a 0x0 rectangle and
+                                   the visibility filter is dropping it
+    present, BRIDGE-SEES=yes       the bridge could see it; the failure
+                                   was in matching, not in reading
+
+To catch a moment that is over before you can alt-tab, leave it running
+into a file and go back to it afterwards:
+
+    python tools/probe_slc.py --watch --interval 2 --out probe.txt
 """
 
 from __future__ import annotations
@@ -61,6 +78,30 @@ def _proc_name(pid: int) -> str:
         k32.CloseHandle(h)
 
 
+def _visibility(node) -> str:
+    """The bounding rectangle, and the verdict the bridge would reach.
+
+    Deliberately reimplemented rather than imported from slc_ui: this
+    probe is meant to be runnable against a checkout that is broken, and
+    the whole point of the reading is to compare it against what the
+    bridge decided, which is worth nothing if both come from one function.
+    """
+    try:
+        rect = node.BoundingRectangle
+    except Exception as exc:
+        return "rect=unreadable ({e})  BRIDGE-SEES=no".format(e=exc)
+    if rect is None:
+        return "rect=None  BRIDGE-SEES=no"
+    try:
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+    except Exception:
+        return "rect=odd  BRIDGE-SEES=no"
+    return "rect={w}x{h}@{l},{t}  BRIDGE-SEES={v}".format(
+        w=width, h=height, l=rect.left, t=rect.top,
+        v="yes" if width > 0 and height > 0 else "NO")
+
+
 def walk(node, depth: int = 0, max_depth: int = 25, out=None):
     """Recursively print the automation subtree."""
     if out is None:
@@ -100,6 +141,12 @@ def walk(node, depth: int = 0, max_depth: int = 25, out=None):
             extras.append("id=" + aid)
         if enabled is not None:
             extras.append("enabled=" + str(enabled))
+        # The property the bridge really filters on, and whether it would
+        # pass. IsEnabled reads True for all ~336 buttons whether or not
+        # they are on screen, so a dump without this cannot answer the one
+        # question that matters when a button "was not on offer": is it
+        # missing from the tree, or present with a 0x0 rectangle?
+        extras.append(_visibility(node))
         if patterns:
             extras.append("patterns=" + "/".join(patterns))
         if extras:

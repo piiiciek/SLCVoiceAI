@@ -303,11 +303,14 @@ Three calls can be bound, and what each one presses is fixed:
 | `intercom` | call the cabin crew — the **ATT** button |
 | `ground` | call the ground crew — the **MECH** button |
 | `pa` | announcement to the passengers |
-| `back` | back out of whichever menu is open |
+| `back` | back out of a menu — **not reliable yet, see below** |
 
-`back` needs only one binding for all three menus. SLC shows one **BACK** at a
-time — the one belonging to the submenu you are in — and the button list is read
-at the moment you press the key, so the same key gets you out of any of them.
+**`back` is not finished.** SLC has three BACK buttons laid out at once — one per
+menu — and two of them sit at the same screen coordinates. The bounding rectangle
+the bridge filters on says "laid out", not "on top", so it cannot tell which one
+you can actually click, and the bridge presses whichever it reaches first. That
+is correct only by luck. Settling it needs hit-testing the point so Windows
+reports the topmost control; until then, leave `back` unbound.
 
 Set them in the panel: click a key in the **Keys bound to SLC buttons** card and
 press the combination you want. It is written to `config.toml` and armed on the

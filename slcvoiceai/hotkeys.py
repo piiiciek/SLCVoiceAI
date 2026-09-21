@@ -44,11 +44,27 @@ log = logging.getLogger(__name__)
 #: against. Nothing here is user-editable; the keys on the left are what
 #: config.toml and the panel talk about.
 #:
-#: "back" needs only one binding for all three menus. SLC shows one BACK
-#: at a time - the one belonging to whichever submenu is open - and the
-#: button list is read at the moment the key is pressed, so the same key
-#: backs out of any of them. Measured across 224 scans logged in flight:
-#: 130 offered a BACK, none ever offered two.
+#: WARNING - "back" is not trustworthy yet. Do not rely on it, and see
+#: the note below before shipping it.
+#:
+#: The flight logs appeared to show SLC offering one BACK at a time, which
+#: would have made a single binding correct for all three menus. That was
+#: an artefact: list_actions() drops same-named controls in the same
+#: window (slc_ui.py, `key = (win_name, name.lower())`), so three BACKs
+#: collapse into one in the log. A live probe of the real tree found
+#: THREE visible at once -
+#:
+#:     cmdTannoySwitchBackGroundCrew   172x19 @ 13,1341
+#:     cmdTannoySwitchBackCabinCrew    172x19 @ 13,1341   <- same point
+#:     cmdTannoySwitchBackPassengers   172x19 @ 13,1324
+#:
+#: - all reporting a real rectangle, two of them at identical coordinates.
+#: The bounding rectangle says "laid out", not "on top", so it cannot tell
+#: which one the pilot can actually click, and whichever the walk reaches
+#: first is the one pressed. That is right only by luck.
+#:
+#: Disambiguating needs something the rectangle does not give: hit-testing
+#: the point, so Windows says which control is topmost.
 ACTIONS: dict[str, tuple[str, ...]] = {
     "intercom": ("INTERCOM",),
     "ground": ("GROUND CREW",),
