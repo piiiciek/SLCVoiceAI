@@ -31,6 +31,19 @@ class Enough(Exception):
     """Raised from the patched sleep to end the loop."""
 
 
+@pytest.fixture(autouse=True)
+def hermetic_claim(monkeypatch):
+    """A watcher claim name of our own, for every test in this file.
+
+    The real one is held by any watcher actually running on the machine -
+    and once starting with SLC works, that is the normal state. Left
+    alone, watch() would find the claim taken and return before doing
+    anything, and half this file would fail on a machine where the
+    feature is switched on. Which is exactly how this was found.
+    """
+    monkeypatch.setattr(autostart, "MUTEX_NAME", r"Local\SLCVoiceAI-tests-claim")
+
+
 def drive(monkeypatch, answers, panel_open=False, looks=None):
     """Run watch() over a scripted sequence of "is SLC running" answers.
 
@@ -365,10 +378,6 @@ def test_the_claim_is_handed_back_when_it_stops(monkeypatch):
     monkeypatch.setattr(watcher, "panel_is_open", lambda: False)
     monkeypatch.setattr(watcher, "launch", lambda: True)
     monkeypatch.setattr(watcher.autostart, "is_installed", lambda: False)
-    # A name of our own: a real watcher running on this machine holds the
-    # real one, and a test that passes only while nothing is running is
-    # not a test.
-    monkeypatch.setattr(autostart, "MUTEX_NAME", r"Local\SLCVoiceAI-tests-claim")
     no_sleeping(monkeypatch, limit=3)
 
     assert not autostart.running(), "something was holding it before we began"
@@ -386,22 +395,11 @@ def test_the_claim_is_handed_back_when_it_stops(monkeypatch):
 # ticking the box in the panel did nothing at all until the machine was
 # restarted: the entry was there, correct, and no watcher existed.
 
-@pytest.fixture
-def own_mutex(monkeypatch):
-    """A claim name of our own.
-
-    The real one is held by any watcher running on this machine, and a
-    test that only passes while nothing is running is not a test.
-    """
-    monkeypatch.setattr(autostart, "MUTEX_NAME",
-                        r"Local\SLCVoiceAI-tests-claim")
-
-
-def test_nothing_holds_a_fresh_claim(own_mutex):
+def test_nothing_holds_a_fresh_claim():
     assert not autostart.running()
 
 
-def test_a_claim_is_held_until_it_is_given_back(own_mutex):
+def test_a_claim_is_held_until_it_is_given_back():
     handle = autostart.claim()
     assert handle, "could not take a claim nobody holds"
     try:
@@ -412,7 +410,7 @@ def test_a_claim_is_held_until_it_is_given_back(own_mutex):
     assert not autostart.running()
 
 
-def test_ticking_the_box_starts_one_now(own_mutex, monkeypatch):
+def test_ticking_the_box_starts_one_now(monkeypatch):
     started = []
     monkeypatch.setattr(autostart.subprocess, "Popen",
                         lambda argv, **kw: started.append((argv, kw)))
@@ -424,7 +422,7 @@ def test_ticking_the_box_starts_one_now(own_mutex, monkeypatch):
     assert kwargs["creationflags"], "a console would flash up at login"
 
 
-def test_it_does_not_start_a_second_one(own_mutex, monkeypatch):
+def test_it_does_not_start_a_second_one(monkeypatch):
     started = []
     monkeypatch.setattr(autostart.subprocess, "Popen",
                         lambda argv, **kw: started.append(argv))
@@ -442,3 +440,25 @@ def test_the_string_windows_holds_is_the_list_we_spawn():
     the box starting one thing and login starting another."""
     assert autostart.command() == " ".join(
         '"{a}"'.format(a=a) for a in autostart.argv())
+
+
+def test_launching_leaves_no_console_behind(monkeypatch):
+    """Windows' `start` runs a batch file as `cmd /K`, and /K means "keep
+    the window". Every launch used to leave a console sitting at the
+    project folder for the rest of the session, and the no-window flag
+    could not reach it - it applies to the cmd created here, not to the
+    one start goes on to spawn.
+
+    The launcher detaches the panel by itself, so there is nothing for
+    start to do here.
+    """
+    seen = {}
+    monkeypatch.setattr(watcher.subprocess, "Popen",
+                        lambda argv, **kw: seen.update(argv=argv, kw=kw))
+
+    assert watcher.launch() is True
+    assert "start" not in seen["argv"], (
+        "launching through start leaves a console window open: "
+        + str(seen["argv"]))
+    assert seen["argv"] == ["cmd", "/c", str(watcher.LAUNCHER)]
+    assert seen["kw"]["creationflags"] & 0x08000000, "a console would flash up"

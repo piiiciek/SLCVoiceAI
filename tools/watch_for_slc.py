@@ -135,9 +135,17 @@ def launch() -> bool:
         log.error("Cannot find %s - has the folder moved?", LAUNCHER)
         return False
     try:
-        # The same thing double-clicking does, detached, with no console
-        # flashing up on a machine that is about to be a flight simulator.
-        subprocess.Popen(["cmd", "/c", "start", "", str(LAUNCHER)],
+        # The same thing double-clicking does, with no console flashing up
+        # on a machine that is about to be a flight simulator.
+        #
+        # Without "start", deliberately. Windows' start command runs a
+        # batch file as `cmd /K`, and /K is "run it and keep the window" -
+        # so every launch left a console sitting at E:\SLCVoiceAI> for the
+        # rest of the session. CREATE_NO_WINDOW cannot help: it applies to
+        # the cmd being created here, not to the second one start goes on
+        # to spawn. The launcher detaches the panel itself, so plain
+        # `cmd /c` runs it and exits with nothing on screen.
+        subprocess.Popen(["cmd", "/c", str(LAUNCHER)],
                          cwd=str(ROOT),
                          creationflags=0x08000000)   # CREATE_NO_WINDOW
         log.info("SLC appeared - launched %s", LAUNCHER.name)
