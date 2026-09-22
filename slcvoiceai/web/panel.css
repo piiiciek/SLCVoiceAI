@@ -60,17 +60,17 @@ body {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
 }
 .mark {
-  width: 26px; height: 26px; flex-shrink: 0;
+  width: 52px; height: 52px; flex-shrink: 0;
   display: grid; place-items: center;
-  border-radius: 8px;
+  border-radius: 16px;
   background: linear-gradient(145deg, #3d86e8, #1d4fa8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .45),
-              inset 0 1px 0 rgba(255, 255, 255, .22);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .45),
+              inset 0 2px 0 rgba(255, 255, 255, .22);
 }
-.mark svg { width: 16px; height: 16px; }
+.mark svg { width: 32px; height: 32px; }
 .mark .band, .mark .boom {
   fill: none;
   stroke: #fff;
@@ -89,6 +89,14 @@ body {
 }
 .wordmark b { color: var(--accent); font-weight: 650; }
 
+/* Below this the name no longer fits beside a logo this size and a coffee
+   button this size, and a title bar reading "SL..." is worse than one that
+   trusts the mark to say it. The window cannot be dragged narrower than
+   430, so this is the bottom of the range and not a phone layout. */
+@media (max-width: 510px) {
+  .wordmark { display: none; }
+}
+
 /* ---------- coffee ----------
    Their colours, our proportions: the official button is 60px tall and
    would own the title bar. */
@@ -96,27 +104,27 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 11px;
+  gap: 9px;
+  height: 39px;
+  padding: 0 16px;
   background: #5f7fff;
   color: #fff;
   border: none;
-  border-radius: 7px;
-  font: 600 11.5px var(--ui);
+  border-radius: 11px;
+  font: 600 17px var(--ui);
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .4);
   transition: filter .15s, transform .05s;
 }
 .coffee:hover { filter: brightness(1.12); }
 .coffee:active { transform: translateY(1px); }
-.mug { width: 15px; height: 15px; flex-shrink: 0; }
+.mug { width: 22px; height: 22px; flex-shrink: 0; }
 .mug .pot { fill: #ffdd00; }
 .mug .handle, .mug .steam {
   fill: none;
   stroke: #fff;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
   stroke-linecap: round;
 }
 .mug .steam { opacity: .8; }

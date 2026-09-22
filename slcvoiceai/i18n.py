@@ -130,7 +130,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # language; only the word in front of it is translated.
         "about.author": "Written by Piciek",
         "coffee.text": "Buy me a coffee",
-        "coffee.title": "opens buymeacoffee.com in your browser",
     },
     "pl": {
         "status.stopped": "Zatrzymany",
@@ -208,7 +207,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "update.feed": "-- wersja {new} jest na GitHubie; ta to {old}  ({url})",
         "about.author": "Twórca: Piciek",
         "coffee.text": "Kopsniesz kawę?",
-        "coffee.title": "otwiera buymeacoffee.com w przeglądarce",
     },
 }
 
