@@ -81,19 +81,37 @@ body {
 .mark .ear { fill: #fff; }
 .mark .mic { fill: var(--ok); }
 
+/* Bahnschrift rather than the Segoe the rest of the panel is set in: it
+   is Windows' DIN, the face on instrument panels and road signs, and it
+   reads as a name rather than as another label.
+
+   The width axis is what makes it fit. Semi-condensed sets the name in
+   112px where Bahnschrift at its normal width takes 132, and beside the
+   coffee button at 580 there are 187 going spare. Asking the variable
+   font for a width is steadier than naming the instance family: it works
+   whether or not Windows exposes "Bahnschrift SemiCondensed" separately.
+
+   It has shipped with every Windows that can run WebView2, so the
+   fallbacks are theory. If one were ever reached the name would run out
+   of room and ellipsise, which is what the overflow rules are for - it
+   cannot push into the button. */
 .wordmark {
-  font-size: 13px; font-weight: 650; letter-spacing: .2px;
+  font-family: Bahnschrift, "Segoe UI Semibold", var(--ui);
+  font-stretch: semi-condensed;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: .5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.wordmark b { color: var(--accent); font-weight: 650; }
+.wordmark b { color: var(--accent); font-weight: inherit; }
 
 /* Below this the name no longer fits beside a logo this size and a coffee
-   button this size, and a title bar reading "SL..." is worse than one that
-   trusts the mark to say it. The window cannot be dragged narrower than
-   430, so this is the bottom of the range and not a phone layout. */
-@media (max-width: 510px) {
+   button this size, and a title bar reading "SLCVoi..." is worse than one
+   that trusts the mark to say it. The window cannot be dragged narrower
+   than 430, so this is the bottom of the range, not a phone layout. */
+@media (max-width: 565px) {
   .wordmark { display: none; }
 }
 
@@ -104,14 +122,14 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 39px;
-  padding: 0 16px;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
   background: #5f7fff;
   color: #fff;
   border: none;
-  border-radius: 11px;
-  font: 600 17px var(--ui);
+  border-radius: 9px;
+  font: 600 14.5px var(--ui);
   white-space: nowrap;
   cursor: pointer;
   box-shadow: 0 2px 5px rgba(0, 0, 0, .4);
@@ -119,7 +137,7 @@ body {
 }
 .coffee:hover { filter: brightness(1.12); }
 .coffee:active { transform: translateY(1px); }
-.mug { width: 22px; height: 22px; flex-shrink: 0; }
+.mug { width: 18px; height: 18px; flex-shrink: 0; }
 .mug .pot { fill: #ffdd00; }
 .mug .handle, .mug .steam {
   fill: none;
