@@ -816,7 +816,12 @@ class App:
             "SLCVoiceAI",
             str(WEB / "index.html"),
             js_api=Api(self),
-            width=580,
+            # The window, not the page: Windows keeps 16 of these for the
+            # frame, so 620 is the 604 the title bar is laid out against.
+            # Measured, after a version of this shipped at 580 and gave
+            # the page 564 - one pixel under the width at which the name
+            # beside the logo stands down.
+            width=620,
             height=760,
             min_size=(430, 480),
             on_top=True,

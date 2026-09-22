@@ -43,6 +43,7 @@ body {
 
 /* ---------- title bar ---------- */
 .titlebar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -51,12 +52,13 @@ body {
   border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
 }
-/* The two side blocks share the leftover space equally, which is what
-   puts the coffee button in the middle of the bar rather than merely
-   between whatever the sides happen to be. Narrowing the window shrinks
-   the sides instead of sliding anything under anything else. */
+/* The name on the left takes the room it needs; the version and language
+   stack keeps to the right. The coffee button is centred on the bar
+   itself, out of the flow, rather than by giving both sides an equal
+   share - the share the right-hand side does not need was the difference
+   between the name fitting and not. */
 .brand {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -86,8 +88,8 @@ body {
    reads as a name rather than as another label.
 
    The width axis is what makes it fit. Semi-condensed sets the name in
-   112px where Bahnschrift at its normal width takes 132, and beside the
-   coffee button at 580 there are 187 going spare. Asking the variable
+   112px where Bahnschrift at its normal width takes 132, and the run
+   between the logo and the button is not generous. Asking the variable
    font for a width is steadier than naming the instance family: it works
    whether or not Windows exposes "Bahnschrift SemiCondensed" separately.
 
@@ -109,9 +111,19 @@ body {
 
 /* Below this the name no longer fits beside a logo this size and a coffee
    button this size, and a title bar reading "SLCVoi..." is worse than one
-   that trusts the mark to say it. The window cannot be dragged narrower
-   than 430, so this is the bottom of the range, not a phone layout. */
-@media (max-width: 565px) {
+   that trusts the mark to say it.
+
+   The number is measured in a real window, which is the whole story of
+   why it is 557 and not 565. A window asked for 580 gave the page 564 -
+   Windows keeps 16 for the frame - so the first version of this rule hid
+   the name at the width the panel actually opened at, by one pixel. The
+   page is what has to be measured, never the window.
+
+   557 is where the run between the name and the button closes to about
+   ten pixels, not where the two finally touch: a name a hair from a
+   button looks like a mistake long before it is one. The window opens at
+   604 of page, so there are some forty to give back before it goes. */
+@media (max-width: 557px) {
   .wordmark { display: none; }
 }
 
@@ -119,12 +131,15 @@ body {
    Their colours, our proportions: the official button is 60px tall and
    would own the title bar. */
 .coffee {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: 7px;
   height: 32px;
-  padding: 0 13px;
+  padding: 0 12px;
   background: #5f7fff;
   color: #fff;
   border: none;
@@ -136,7 +151,9 @@ body {
   transition: filter .15s, transform .05s;
 }
 .coffee:hover { filter: brightness(1.12); }
-.coffee:active { transform: translateY(1px); }
+/* The centring lives in the same property, so pressing it has to carry
+   the centring along or the button jumps to the left edge. */
+.coffee:active { transform: translate(-50%, -50%) translateY(1px); }
 .mug { width: 18px; height: 18px; flex-shrink: 0; }
 .mug .pot { fill: #ffdd00; }
 .mug .handle, .mug .steam {
@@ -148,7 +165,8 @@ body {
 .mug .steam { opacity: .8; }
 
 .titlebar-right {
-  flex: 1 1 0;
+  margin-left: auto;
+  flex: 0 0 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
