@@ -177,6 +177,23 @@ def snapshot(max_depth: int, process_name: str = "SLC.exe") -> str:
     return "\n".join(lines)
 
 
+def only_matching(text: str, terms: list[str]) -> str:
+    """Just the controls being chased, out of the whole tree.
+
+    A full dump is 69 KB. Left running at two-second intervals for a
+    flight that is over a hundred megabytes to search by hand for the one
+    moment that mattered - a plan that quietly fails. Matching the
+    AutomationId is the steadier half: `groundcrew` finds
+    txtGroundCrewLastResponse and cmdGroundCrewAwaitingResponse whatever
+    SLC happens to be calling them on screen.
+    """
+    if not terms:
+        return text
+    keep = [line for line in text.splitlines()
+            if any(t in line.lower() for t in terms)]
+    return "\n".join(keep) if keep else "(nothing matching)"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -187,7 +204,18 @@ def main() -> int:
     ap.add_argument("--out", help="also append each snapshot to this file")
     ap.add_argument("--process", default="SLC.exe",
                     help="process to inspect (default: SLC.exe); handy for testing")
+    ap.add_argument("--only", default="",
+                    help="keep only lines mentioning any of these, comma "
+                         "separated, case-insensitive; matches the "
+                         "AutomationId too. Example: "
+                         "--only goahead,groundcrew,cockpittoground")
+    ap.add_argument("--changes-only", action="store_true",
+                    help="with --watch, write a snapshot only when it differs "
+                         "from the one before, so the file holds the moments "
+                         "something happened and nothing else")
     args = ap.parse_args()
+
+    terms = [t.strip().lower() for t in args.only.split(",") if t.strip()]
 
     def emit(text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
@@ -204,14 +232,18 @@ def main() -> int:
             print(block.encode("ascii", "replace").decode("ascii"))
 
     if not args.watch:
-        emit(snapshot(args.depth, args.process))
+        emit(only_matching(snapshot(args.depth, args.process), terms))
         return 0
 
     print("Watching SLC. Open the communications popup now. Ctrl+C to stop.\n")
+    previous = None
     try:
         while True:
             try:
-                emit(snapshot(args.depth, args.process))
+                current = only_matching(snapshot(args.depth, args.process), terms)
+                if not (args.changes_only and current == previous):
+                    emit(current)
+                previous = current
             except Exception as exc:
                 # One bad snapshot (a window closing mid-walk, a COM hiccup)
                 # must not end a watch the user left running for a whole flight.

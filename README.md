@@ -536,6 +536,23 @@ offering, and the score of the best match. That usually shows the problem in one
 line: the button was not on offer at all, or the translation shares no words with
 it.
 
+**A button SLC shows you but the bridge never offers** — that is a question
+about the moment, and the moment is over before you can alt-tab. Leave the probe
+running through the flight, narrowed to the controls you are chasing and quiet
+until something changes:
+
+```bash
+python tools/probe_slc.py --watch --interval 2 --changes-only --only goahead,groundcrew,cockpittoground --out probe.txt
+```
+
+`--only` matches the AutomationId as well as the name, which is the steadier
+half: nothing on screen says "groundcrew", but `txtGroundCrewLastResponse` does.
+Without it a dump is 66 KB, and an hour at two-second intervals is a hundred
+megabytes to search by hand; with it, ten lines a snapshot and only when they
+differ. `BRIDGE-SEES=NO` on the line means the control is there with a 0x0
+rectangle and the visibility filter is dropping it — which is not the same
+problem as the control being absent.
+
 The second case is what `aliases.py` is for. Whisper translates, so Polish
 "piec na piec" arrives as "5 by 5" — not one word of which appears in
 `LOUD AND CLEAR`, while `Stand By` happened to share "by". String similarity
