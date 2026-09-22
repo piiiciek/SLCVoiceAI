@@ -305,6 +305,41 @@ class Bridge:
         listener.start()
         return listener
 
+    #: Buttons that only appear once a submenu has been opened, and which
+    #: one opens them. One entry, because one is all that has been watched
+    #: happen: in a real flight, pressing GROUND CREW put GO AHEAD on
+    #: screen where a moment earlier there had been nothing to press.
+    #:
+    #: Deliberately advice and not an action. Opening that panel transmits
+    #: - the button is cmdPlayCaptainCockpitToGround, the captain calling
+    #: ground - and when the ground crew is not waiting there is nothing
+    #: on screen to say so: the button sits at 0x0 exactly like the sixty
+    #: other inapplicable ones. A bridge that pressed it on a guess would
+    #: put the captain on the radio uninvited.
+    BEHIND_A_SUBMENU = {"GO AHEAD": "ground"}
+
+    def _how_to_reach(self, missing: str, actions) -> str:
+        """What the pilot can do about it, in their own key bindings."""
+        from . import keys
+        from .hotkeys import ACTIONS
+
+        action = self.BEHIND_A_SUBMENU.get(missing)
+        if action is None:
+            return " The phrase was understood; that button is not being offered."
+
+        opener = ACTIONS[action][0]
+        if not any(opener in a.name.upper() for a in actions):
+            # Not even the way in is on screen, so telling them to press it
+            # would send them looking for something that is not there.
+            return " The phrase was understood; that button is not being offered."
+
+        bound = (self.cfg.hotkeys or {}).get(action, "")
+        if bound:
+            return (" Open {o} first - your {k} - then say it again."
+                    .format(o=opener, k=keys.pretty(bound)))
+        return (" Open {o} in SLC first, then say it again. Binding a key to "
+                "it in the panel makes that one keypress.".format(o=opener))
+
     def _too_old(self, captured_at: float | None, text: str, stage: str) -> bool:
         """Has this command sat around long enough to be worth dropping?
 
@@ -375,8 +410,7 @@ class Bridge:
             missing = aliases.target_not_offered(text, [a.name for a in actions])
             if missing:
                 log.info("Declined: nothing to press - %s is not on screen "
-                         "right now. The phrase was understood; that button "
-                         "is not being offered.", missing)
+                         "right now.%s", missing, self._how_to_reach(missing, actions))
             else:
                 log.info("Declined: %s", decision.reasoning)
             return

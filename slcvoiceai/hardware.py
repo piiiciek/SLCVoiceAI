@@ -123,16 +123,39 @@ def choose(preferred: str = "auto") -> tuple[str, str, str]:
     return "base", "cuda", "int8"
 
 
+def _download_note(model: str) -> str:
+    """Whether choosing this model also means waiting for it.
+
+    Asked here because this command is where somebody finds out which model
+    they are getting, and its size is what decides whether the first start
+    takes seconds or a coffee break.
+    """
+    from .stt import MODEL_MB, _cache_dir
+
+    try:
+        cached = _cache_dir() / ("models--Systran--faster-whisper-" + model)
+        if cached.is_dir():
+            return ""
+        size = MODEL_MB.get(model)
+        if size is None:
+            return " It is not downloaded yet; the first start fetches it."
+        return (" It is not downloaded yet: the first start fetches about "
+                "{mb} MB, once.".format(mb=size))
+    except Exception:  # pragma: no cover - a note is not worth an error
+        return ""
+
+
 def describe() -> str:
     """One-paragraph summary for --check-hardware."""
     gpu = detect_gpu()
     model, device, compute = choose("auto")
+    waiting = _download_note(model)
     if gpu is None:
         return ("No NVIDIA GPU detected (or nvidia-smi is unavailable).\n"
-                "Auto would pick: {m} on {d} ({c}).".format(
-                    m=model, d=device, c=compute))
+                "Auto would pick: {m} on {d} ({c}).{w}".format(
+                    m=model, d=device, c=compute, w=waiting))
     return ("GPU: {gpu}\n"
-            "Auto would pick: {m} on {d} ({c}).\n\n"
+            "Auto would pick: {m} on {d} ({c}).{w}\n\n"
             "Free VRAM is measured now, so start the simulator first if you "
             "want this to reflect a real flight.".format(
-                gpu=gpu, m=model, d=device, c=compute))
+                gpu=gpu, m=model, d=device, c=compute, w=waiting))

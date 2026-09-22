@@ -1055,3 +1055,53 @@ def test_the_decline_path_uses_it():
         "the refusal does not ask what was missing")
     assert "decision.reasoning" in decline, (
         "the matcher's own reason has to survive for the other cases")
+
+
+# -- and what to do about it ----------------------------------------------
+
+def _advice(bindings, names):
+    """Bridge._how_to_reach without building a Bridge, which would want a
+    router, SLC and a speech model to answer a question about wording."""
+    import types
+
+    from slcvoiceai.app import Bridge
+
+    stand_in = types.SimpleNamespace(
+        cfg=types.SimpleNamespace(hotkeys=bindings),
+        BEHIND_A_SUBMENU=Bridge.BEHIND_A_SUBMENU)
+    actions = [types.SimpleNamespace(name=n) for n in names]
+    return Bridge._how_to_reach(stand_in, "GO AHEAD", actions)
+
+
+def test_it_names_the_key_the_pilot_actually_bound():
+    """Telling someone to press Page Up when they bound Home is worse than
+    telling them nothing."""
+    assert "Page Up" in _advice({"ground": "page_up"}, QUIET)
+    assert "Home" in _advice({"ground": "home"}, QUIET)
+    assert "Ctrl + G" in _advice({"ground": "ctrl+g"}, QUIET)
+
+
+def test_with_no_key_bound_it_says_where_to_bind_one():
+    said = _advice({}, QUIET)
+    assert "GROUND CREW" in said and "panel" in said
+    assert "your" not in said, "it invented a key binding"
+
+
+def test_it_does_not_point_at_a_way_in_that_is_not_on_screen():
+    """The advice sends the pilot looking for a button. If that button is
+    not there either, it sends them looking for nothing."""
+    without = [n for n in QUIET if "GROUND CREW" not in n]
+    said = _advice({"ground": "page_up"}, without)
+    assert "Page Up" not in said and "Open" not in said
+
+
+def test_every_submenu_it_names_is_one_a_key_can_open():
+    """The advice offers to make it a single keypress, so the action it
+    names has to be one the hotkey card really offers."""
+    from slcvoiceai.app import Bridge
+    from slcvoiceai.hotkeys import ACTIONS
+
+    for button, action in Bridge.BEHIND_A_SUBMENU.items():
+        assert action in ACTIONS, (
+            "{b} is said to be behind {a}, which is not a bindable action"
+            .format(b=button, a=action))

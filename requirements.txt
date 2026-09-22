@@ -3,6 +3,10 @@ sounddevice>=0.4.6
 numpy>=1.26
 pynput>=1.7.6
 uiautomation>=2.0.18
+# Imported directly for CoInitializeEx on the worker threads. It
+# arrives with uiautomation anyway, but a direct import should not
+# rest on somebody else's dependency list.
+comtypes>=1.2.1
 pydantic>=2.7
 rapidfuzz>=3.9
 

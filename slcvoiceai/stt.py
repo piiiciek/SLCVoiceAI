@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -76,6 +77,52 @@ _NVIDIA_DLL_DIRS = _register_nvidia_dlls()
 
 
 #: Substrings that identify a genuine GPU/driver problem in ctranslate2's or
+#: Roughly what each model costs to fetch the first time, in megabytes,
+#: measured from a cache holding all four. Approximate on purpose: the
+#: point is "this is a download, go and make coffee", not an exact figure.
+MODEL_MB = {"tiny": 75, "base": 142, "small": 464, "medium": 1500,
+            "large-v2": 2900, "large-v3": 2900, "distil-large-v3": 1500}
+
+
+def _cache_dir() -> Path:
+    """Where huggingface_hub keeps what it has already fetched."""
+    home = os.environ.get("HF_HOME")
+    if home:
+        return Path(home) / "hub"
+    return Path.home() / ".cache" / "huggingface" / "hub"
+
+
+def _warn_if_not_downloaded(model: str) -> None:
+    """Say so before a first run sits there looking frozen.
+
+    faster-whisper fetches the model the first time it is asked for one,
+    and "loading the speech model, this takes a few seconds" is true only
+    from the second run onwards - the first is a 1.5 GB download on the
+    default model. Somebody watching a disabled button for ten minutes
+    reasonably concludes the thing has hung and kills it, which leaves a
+    half-fetched model behind.
+
+    Best effort: a local path or an unknown name is left alone rather than
+    guessed at, and any failure to look is not worth failing a start over.
+    """
+    try:
+        if Path(model).exists():
+            return                      # a model directory of their own
+        cached = _cache_dir() / "models--Systran--faster-whisper-{m}".format(m=model)
+        if cached.is_dir():
+            return
+        size = MODEL_MB.get(model)
+        if size is None:
+            log.info("Whisper %s is not in the cache yet, so it is being "
+                     "downloaded now. This happens once.", model)
+        else:
+            log.warning("Whisper %s has not been downloaded yet - fetching it "
+                        "now, about %d MB. This happens once; the wait is the "
+                        "download, not a hang.", model, size)
+    except Exception:  # pragma: no cover - never fail a start over a guess
+        log.debug("Could not tell whether %s is cached", model, exc_info=True)
+
+
 #: CUDA's error text, as opposed to a download, disk or permission failure.
 _CUDA_MARKERS = (
     "cuda", "cudnn", "cublas", "gpu", "no kernel image",
@@ -117,6 +164,7 @@ class Transcriber:
 
         self.cfg = cfg
         model, device, compute_type = _resolve(cfg)
+        _warn_if_not_downloaded(model)
         log.info("Loading Whisper %s on %s (%s)...", model, device, compute_type)
         started = time.time()
         try:

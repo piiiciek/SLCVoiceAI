@@ -190,13 +190,19 @@ python -m slcvoiceai --list-devices
 `model = "auto"` (the default) reads free VRAM at startup and picks the largest
 model that fits with headroom:
 
-| Free VRAM | Model | Per command | Notes |
-|---|---|---|---|
-| ≥ 3600 MB | `large-v3` | 1.61s | best at translating non-English |
-| ≥ 2200 MB | `medium` | 1.25s | noticeably looser translation |
-| ≥ 1100 MB | `small` | 0.96s | translates non-English literally |
-| ≥ 700 MB | `base` | 0.40s | weaker still |
-| < 700 MB | `base` on CPU | ~1.6s | a starved GPU loses to a free CPU |
+| Free VRAM | Model | Per command | Download | Notes |
+|---|---|---|---|---|
+| ≥ 3600 MB | `large-v3` | 1.61s | 2.9 GB | best at translating non-English |
+| ≥ 2200 MB | `medium` | 1.25s | 1.5 GB | noticeably looser translation |
+| ≥ 1100 MB | `small` | 0.96s | 464 MB | translates non-English literally |
+| ≥ 700 MB | `base` | 0.40s | 142 MB | weaker still |
+| < 700 MB | `base` on CPU | ~1.6s | 142 MB | a starved GPU loses to a free CPU |
+
+**The first start downloads the model**, into
+`%USERPROFILE%\.cache\huggingface`, and the panel will sit on "Loading
+Whisper" for as long as that takes — minutes, on the larger two. It happens
+once per model, and the log says so when it is happening, so a long first
+wait is the download rather than a hang. Every start after that is seconds.
 
 This matters because the bridge shares a card with the simulator and the
 simulator wins: on a 16 GB card MSFS 2024 routinely holds 15 GB, which left
