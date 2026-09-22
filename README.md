@@ -365,23 +365,37 @@ Windows login; the same thing from a terminal, if you prefer:
 python tools/watch_for_slc.py --install
 ```
 
-From the next login it sits in the background, and when `SLC.exe` appears it
-runs `SLCVoiceAI.bat` exactly as double-clicking would. It launches on the
-transition only: not again while SLC stays up, and not if the panel is already
-open — so closing the panel mid-session leaves it closed. `--uninstall` removes
-it, `--status` says what is installed and what is running, and nothing here
-needs administrator rights (it is one value under `HKCU\...\Run`).
+Ticking the box starts one straight away as well as registering it, so it
+works from that moment rather than from the next restart. Unticking needs
+nothing extra: the watcher reads the same registry value every few seconds and
+stands down when it goes. Only ever one runs — Windows starts one at login and
+the box starts one, and they meet the first time the machine is restarted, so
+the second finds the first already there and stops.
+
+It sits in the background, and when `SLC.exe` appears it runs `SLCVoiceAI.bat`
+exactly as double-clicking would. It launches on the transition only: not again
+while SLC stays up, and not if the panel is already open — so closing the panel
+mid-session leaves it closed. `--uninstall` removes it, `--status` says what is
+installed and what is running, and nothing here needs administrator rights (it
+is one value under `HKCU\...\Run`).
 
 The watcher imports nothing but the standard library. It has to be cheap: it
 runs from login to shutdown, and asking ctypes whether a process exists costs
 about ten milliseconds every five seconds.
 
-**Worth knowing before you install it.** The panel loads Whisper when it
-starts, so starting it with SLC means starting it *after* the simulator — when
-the graphics card has least to spare. That is what pushes the model down to
-`small` and what makes the occasional command take tens of seconds. Launching
-the panel before the simulator is still the better habit; the watcher is for
-when you would rather not have to remember.
+**What it does to the speech model.** The panel picks a Whisper model from
+the VRAM free when it loads, so when it starts decides what you get. This used
+to carry a warning that launching with SLC would push the model down; measuring
+it says otherwise, because `SLC.exe` turns up early — before the simulator has
+loaded a flight — and the panel gets in while the card is still mostly free.
+Three launches this way took `medium`; starting the panel by hand during a
+loaded session, with 986 MB left, took `base`.
+
+The old warning still holds for the case it was really about: if SLC only
+starts once a flight is already loaded, the panel loads into whatever is left.
+Starting it before the simulator remains the surest way; the watcher is for
+when you would rather not have to remember, and on this machine it turned out
+to be the better habit rather than the worse one.
 
 ### Headless
 
