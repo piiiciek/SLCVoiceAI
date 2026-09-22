@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 
+from . import aliases
 from .config import Config
 from .context import (FLIGHT_FIELDS, flight_is_underway, format_context,
                       read_flight_context)
@@ -365,7 +366,19 @@ class Bridge:
         decision = self.router.decide(text, actions, format_context(flight))
 
         if decision.action_index is None:
-            log.info("Declined: %s", decision.reasoning)
+            # Why, in terms of the screen rather than the wording. A pilot
+            # answering a ground crew that is not waiting gets told the
+            # phrase was ambiguous, which is untrue and sends them looking
+            # for better words: the words were right and the button was not
+            # there. Only when the family's button really is absent - if it
+            # was on screen, the matcher's own reason stands.
+            missing = aliases.target_not_offered(text, [a.name for a in actions])
+            if missing:
+                log.info("Declined: nothing to press - %s is not on screen "
+                         "right now. The phrase was understood; that button "
+                         "is not being offered.", missing)
+            else:
+                log.info("Declined: %s", decision.reasoning)
             return
 
         action = actions[decision.action_index]

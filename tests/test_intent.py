@@ -14,8 +14,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
+from slcvoiceai import aliases  # noqa: E402
 from slcvoiceai.intent import FuzzyRouter, normalise  # noqa: E402
 
 #: Captured from a running SLC, Ground Crew menu open.
@@ -989,3 +991,67 @@ def test_ending_a_call_is_not_pulling_the_jetway(router):
                ("CANCEL / HANGUP", "DISCONNECT JETWAY", "CONNECT JETWAY")]
     decision = router.decide("disconnect the jetway", actions)
     assert actions[decision.action_index].name == "DISCONNECT JETWAY"
+
+
+# -- saying what was missing, not what was wrong ---------------------------
+#
+# A pilot answering a ground crew that is not waiting used to be told the
+# phrase was too ambiguous. It was not: "go ahead" is exact. The button was
+# absent. One flight lost eight minutes to that message, tried in Polish and
+# then in English, because it sent them looking for better words.
+
+#: The top-level menu, as SLC really logged it, with no GO AHEAD on screen.
+QUIET = ["Notifications", "Toggle Door Mode", "Seatbelts", "Inflight Services",
+         "Aircraft Layout", "Available Phrases Window", "Narration Window",
+         "Check List", "Settings", "Toggle Doors", "Tannoy", "AUDIO MANAGER",
+         "GROUND CREW >", "INTERCOM >", "P A SYSTEM >", "PHONE >", "BACK"]
+CALLING = QUIET + ["GO AHEAD"]
+
+
+@pytest.mark.parametrize("said", [
+    "go ahead",           # exactly the button's own words
+    "you can speak",      # was already an alias, and still found nothing
+    "you can continue",   # was not an alias until this flight
+    "im listening",
+])
+def test_it_names_the_button_that_was_not_there(said):
+    assert aliases.target_not_offered(said, QUIET) == "GO AHEAD"
+
+
+@pytest.mark.parametrize("said", ["go ahead", "you can speak", "im listening"])
+def test_it_says_nothing_when_the_button_is_on_screen(said):
+    """Then the refusal really was about matching, and whatever the matcher
+    said about it stands."""
+    assert aliases.target_not_offered(said, CALLING) is None
+
+
+@pytest.mark.parametrize("said", [
+    # "ok" is an alias for ROGER and sits inside half of what a pilot says.
+    # Reporting this as reaching for ROGER would be a confident lie.
+    "ok, you can start boarding if you are ready",
+    "Take care!",
+    "help me with these doors",
+    "",
+    "   ",
+])
+def test_a_word_in_passing_names_nothing(said):
+    assert aliases.target_not_offered(said, QUIET) is None
+
+
+def test_the_one_it_names_is_a_button_slc_really_has():
+    """The message tells the pilot to look for something. Naming a family
+    key SLC never puts on a button would send them looking for nothing."""
+    assert aliases.target_not_offered("go ahead", QUIET) == "GO AHEAD"
+    # and the name it gives has to be the thing that would satisfy it
+    assert aliases.target_not_offered("go ahead", ["GO AHEAD"]) is None
+
+
+def test_the_decline_path_uses_it():
+    """The function is only worth having if the refusal actually calls it."""
+    source = (ROOT / "slcvoiceai" / "app.py").read_text(encoding="utf-8")
+    decline = source[source.index("if decision.action_index is None:"):]
+    decline = decline[:decline.index("action = actions[")]
+    assert "target_not_offered" in decline, (
+        "the refusal does not ask what was missing")
+    assert "decision.reasoning" in decline, (
+        "the matcher's own reason has to survive for the other cases")

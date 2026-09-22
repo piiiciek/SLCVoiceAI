@@ -46,7 +46,12 @@ ALIASES: dict[str, tuple[str, ...]] = {
                  # "prosze mowic" came back as "you can say" four times in
                  # one flight, with GO AHEAD on screen and refused each time.
                  "say", "you can say", "say it", "you may speak",
-                 "we are listening", "i hear you go ahead"),
+                 "we are listening", "i hear you go ahead",
+                 # Whisper renders Polish "mozesz mowic" as any of these
+                 # from one flight to the next; "you can speak" was already
+                 # here and "you can continue" was not, so the same words in
+                 # Polish worked or failed on the toss of a coin.
+                 "you can continue", "you can go ahead", "please continue"),
     "standby": ("stand by", "wait", "hold on", "one moment", "just a second",
                 "give me a moment", "wait a moment"),
     "repeat transmission": ("say again", "repeat", "repeat that",
@@ -345,6 +350,50 @@ def aliases_for(button_name: str) -> tuple[str, ...]:
             # and made it tie with INTERCOM > on "call the crew".
             return ALIASES[key]
     return ()
+
+
+def target_not_offered(said: str, button_names) -> str | None:
+    """The button the pilot was reaching for, when it is not on screen.
+
+    `aliases_for` asks what a button can be called. This asks the reverse -
+    what was the pilot reaching for - and answers only when that button is
+    not among the ones SLC is showing.
+
+    It exists because of what a refusal looks like from the cockpit. Saying
+    "go ahead" to a ground crew that is not waiting gets "the phrase is too
+    ambiguous", which blames the wording and is simply untrue: the wording
+    was exact, the button was absent. One flight lost eight minutes to that
+    message, tried in two languages.
+
+    Returns None when the phrase belongs to no family, or when the family's
+    button is on screen after all - then the refusal really was about
+    matching, and whatever the matcher said about it stands.
+    """
+    words = _words(said)
+    if not words:
+        return None
+
+    best_key, best_len = None, 0
+    for key, phrases in ALIASES.items():
+        for phrase in (key,) + phrases:
+            needle = _words(phrase)
+            if len(needle) <= best_len or not _contains_sequence(words, needle):
+                continue
+            # The phrase has to be most of what was said. "ok" is an alias
+            # for ROGER and sits inside half of everything a pilot says, so
+            # without this "ok, you can start boarding if you are ready"
+            # would be reported as reaching for a button nobody wanted.
+            if len(words) > len(needle) + 2:
+                continue
+            best_key, best_len = key, len(needle)
+
+    if best_key is None:
+        return None
+    wanted = _words(best_key)
+    for name in button_names:
+        if _contains_sequence(_words(name), wanted):
+            return None
+    return best_key.upper()
 
 
 def _words(text: str) -> list[str]:
