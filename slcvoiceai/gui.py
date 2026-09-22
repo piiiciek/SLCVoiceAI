@@ -549,6 +549,20 @@ class App:
         self._write(t("feed.auto_launch",
                       state=t("feed.dry_on") if now else t("feed.dry_off")),
                     "accent")
+
+        # Registering it is not running it. The Run key is read at login
+        # and nowhere else, so ticking this box meant nothing at all until
+        # the machine was next restarted - the entry sat there, correct,
+        # and no watcher existed. Switching it off needs no matching call:
+        # the watcher that is running reads the same entry and stands down
+        # within a few seconds of it going.
+        if now:
+            try:
+                if autostart.start():
+                    self._write(t("feed.watcher_started"), "muted")
+            except Exception as exc:
+                log.warning("Could not start the watcher: %s", exc)
+                self._write(t("feed.watcher_failed", error=exc), "warn")
         return now
 
     def _watch_for_slc(self) -> None:

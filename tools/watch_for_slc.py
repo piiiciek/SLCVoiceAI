@@ -150,6 +150,29 @@ def launch() -> bool:
 # -- the loop --------------------------------------------------------------
 
 def watch(process_name: str, every: float, settle: float, once: bool) -> int:
+    # One watcher is enough. The panel starts one the moment the box is
+    # ticked and Windows starts one at every login, so the two meet the
+    # first time the machine is restarted - and two watchers racing to
+    # open one panel is how you get two panels.
+    claim = autostart.claim()
+    if claim is None:
+        log.info("Another watcher is already running; nothing to do here.")
+        return 0
+    try:
+        return _watch(process_name, every, settle, once)
+    finally:
+        # Handing it back matters even though the process usually ends
+        # here: --once returns, and the tests call this over and over in
+        # one process, where a claim kept past the end would make every
+        # run after the first think a watcher was already up.
+        autostart.release(claim)
+
+
+def _watch(process_name: str, every: float, settle: float, once: bool) -> int:
+    # Only a watcher that was started as the installed one stands down
+    # when the entry goes; running this by hand is not affected.
+    installed_at_start = autostart.is_installed()
+
     log.info("Watching for %s every %.0fs. Launching %s when it appears.",
              process_name, every, LAUNCHER.name)
     def looking() -> bool:
@@ -172,6 +195,14 @@ def watch(process_name: str, every: float, settle: float, once: bool) -> int:
                  process_name)
     while True:
         time.sleep(every)
+
+        # Unticking the box in the panel removes the entry; this is how
+        # the watcher already running hears about it, rather than lingering
+        # until the machine is next restarted.
+        if installed_at_start and not autostart.is_installed():
+            log.info("Starting with SLC was switched off; stopping.")
+            return 0
+
         running = looking()
 
         if running and not seen:

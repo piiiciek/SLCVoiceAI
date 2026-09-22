@@ -291,3 +291,154 @@ def test_the_panel_and_the_tool_register_the_same_thing():
 
     assert watcher.command() == autostart.command()
     assert watcher.installed is autostart.installed
+
+
+# -- one watcher, and only while it is wanted ------------------------------
+#
+# The bug these are here for: the tick box wrote the registry value and
+# nothing else, so the entry was correct and no watcher existed until the
+# machine was next restarted. Now the box starts one - which makes "is one
+# already up" and "is it still wanted" questions that have to be right.
+
+def no_sleeping(monkeypatch, limit=6):
+    """Let the loop run `limit` times, then stop it.
+
+    The loop never returns on its own when it is working, so a fault here
+    would hang the suite rather than fail it.
+    """
+    count = {"n": 0}
+
+    def sleep(_seconds):
+        count["n"] += 1
+        if count["n"] > limit:
+            raise Enough
+
+    monkeypatch.setattr(watcher.time, "sleep", sleep)
+    return count
+
+
+def test_a_second_watcher_stands_down(monkeypatch):
+    """Windows starts one at login and the panel starts one when the box
+    is ticked, so the two meet the first time the machine restarts. Two
+    watchers racing to open one panel is how you get two panels."""
+    launched = []
+    monkeypatch.setattr(watcher.autostart, "claim", lambda: None)
+    monkeypatch.setattr(watcher, "launch", lambda: launched.append(True))
+    monkeypatch.setattr(watcher, "is_running", lambda _n: True)
+    # Without this the loop is what stops the test, and a broken guard
+    # hangs the suite instead of failing it - which is exactly what
+    # happened the first time this was written.
+    no_sleeping(monkeypatch, limit=3)
+
+    assert watcher.watch("SLC.exe", every=0, settle=0, once=False) == 0
+    assert launched == [], "it went on watching anyway"
+
+
+def test_it_stops_when_starting_with_slc_is_switched_off(monkeypatch):
+    """Unticking the box removes the registry value. The watcher already
+    running has to notice, or it keeps opening the panel until the machine
+    is restarted - and the box says it is off."""
+    answers = iter([True, True, False, False, False])
+    monkeypatch.setattr(watcher.autostart, "is_installed",
+                        lambda: next(answers, False))
+    monkeypatch.setattr(watcher, "is_running", lambda _n: False)
+    no_sleeping(monkeypatch)
+
+    assert watcher.watch("SLC.exe", every=0, settle=0, once=False) == 0
+
+
+def test_running_it_by_hand_is_not_stopped_by_the_entry(monkeypatch):
+    """Someone running the tool from a terminal never installed it, so an
+    entry that is not there is not a message to stop."""
+    monkeypatch.setattr(watcher.autostart, "is_installed", lambda: False)
+    monkeypatch.setattr(watcher, "is_running", lambda _n: False)
+    no_sleeping(monkeypatch, limit=4)
+
+    with pytest.raises(Enough):
+        watcher.watch("SLC.exe", every=0, settle=0, once=False)
+
+
+def test_the_claim_is_handed_back_when_it_stops(monkeypatch):
+    """--once returns, and so does standing down. A claim kept past the
+    end would make the next watcher think one was already up."""
+    monkeypatch.setattr(watcher, "is_running", lambda _n: True)
+    monkeypatch.setattr(watcher, "panel_is_open", lambda: False)
+    monkeypatch.setattr(watcher, "launch", lambda: True)
+    monkeypatch.setattr(watcher.autostart, "is_installed", lambda: False)
+    # A name of our own: a real watcher running on this machine holds the
+    # real one, and a test that passes only while nothing is running is
+    # not a test.
+    monkeypatch.setattr(autostart, "MUTEX_NAME", r"Local\SLCVoiceAI-tests-claim")
+    no_sleeping(monkeypatch, limit=3)
+
+    assert not autostart.running(), "something was holding it before we began"
+    try:
+        watcher.watch("SLC.exe", every=0, settle=0, once=True)
+    except Enough:
+        pass
+    assert not autostart.running(), "the claim was kept after it stopped"
+
+
+
+# -- starting it now -------------------------------------------------------
+#
+# The registry value is read at login and nowhere else, so for a while
+# ticking the box in the panel did nothing at all until the machine was
+# restarted: the entry was there, correct, and no watcher existed.
+
+@pytest.fixture
+def own_mutex(monkeypatch):
+    """A claim name of our own.
+
+    The real one is held by any watcher running on this machine, and a
+    test that only passes while nothing is running is not a test.
+    """
+    monkeypatch.setattr(autostart, "MUTEX_NAME",
+                        r"Local\SLCVoiceAI-tests-claim")
+
+
+def test_nothing_holds_a_fresh_claim(own_mutex):
+    assert not autostart.running()
+
+
+def test_a_claim_is_held_until_it_is_given_back(own_mutex):
+    handle = autostart.claim()
+    assert handle, "could not take a claim nobody holds"
+    try:
+        assert autostart.running()
+        assert autostart.claim() is None, "two watchers both got the claim"
+    finally:
+        autostart.release(handle)
+    assert not autostart.running()
+
+
+def test_ticking_the_box_starts_one_now(own_mutex, monkeypatch):
+    started = []
+    monkeypatch.setattr(autostart.subprocess, "Popen",
+                        lambda argv, **kw: started.append((argv, kw)))
+
+    assert autostart.start() is True
+    assert len(started) == 1
+    argv, kwargs = started[0]
+    assert argv == autostart.argv()
+    assert kwargs["creationflags"], "a console would flash up at login"
+
+
+def test_it_does_not_start_a_second_one(own_mutex, monkeypatch):
+    started = []
+    monkeypatch.setattr(autostart.subprocess, "Popen",
+                        lambda argv, **kw: started.append(argv))
+
+    handle = autostart.claim()
+    try:
+        assert autostart.start() is False
+    finally:
+        autostart.release(handle)
+    assert started == [], "it started one on top of the one already running"
+
+
+def test_the_string_windows_holds_is_the_list_we_spawn():
+    """Two spellings of the same command. Drift between them would mean
+    the box starting one thing and login starting another."""
+    assert autostart.command() == " ".join(
+        '"{a}"'.format(a=a) for a in autostart.argv())
