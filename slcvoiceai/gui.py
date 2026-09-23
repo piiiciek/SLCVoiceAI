@@ -787,9 +787,13 @@ class App:
     def _describe_bridge(self) -> None:
         """The subtitle line, rebuilt - it is also what a language change
         has to redraw, so it lives on its own."""
-        device = getattr(getattr(self.bridge, "stt", None), "_device", "?")
+        stt = getattr(self.bridge, "stt", None)
+        device = getattr(stt, "_device", "?")
+        # The resolved model, not the requested one: "auto" tells the pilot
+        # nothing, and on the Groq path cfg.stt.model is not even what ran.
+        model = getattr(stt, "_model_name", "") or self.cfg.stt.model
         self._subtitle = t("subtitle.ready", key=self.cfg.audio.ptt_key,
-                           model=self.cfg.stt.model, dev=device,
+                           model=model, dev=device,
                            backend=self.cfg.intent.backend)
         self._push("subtitle", self._subtitle)
 

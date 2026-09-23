@@ -81,6 +81,17 @@ min_seconds = 0.35      # ignore accidental taps of the PTT key
 # would pick with:
 #
 #   python -m slcvoiceai --check-hardware
+# Where the speech is decoded.
+#
+#   "local" - faster-whisper on this machine. Free, works without a network,
+#             and shares the graphics card with the simulator, which is the
+#             whole difficulty above.
+#   "groq"  - send the clip away and get whisper-large-v3 every time, whatever
+#             MSFS is holding. Needs a key and a connection; see [groq] below.
+#
+# Everything from `model` to `compute_type` is the local path only.
+backend = "local"
+
 model = "auto"
 device = "auto"          # "auto", "cuda" or "cpu"
 compute_type = "auto"    # "auto", "int8" or "float16"
@@ -117,6 +128,32 @@ api_key = ""
 api_key_env = "ANTHROPIC_API_KEY"
 max_tokens = 512
 timeout_seconds = 20.0
+
+[groq]
+# Only used when [stt] backend = "groq". Free key: https://console.groq.com/keys
+#
+# It fits inside the free tier with room to spare. Measured on a Krakow-Rome
+# flight: 75 clips, 147 seconds of speech in total. Groq bills a minimum of
+# ten seconds per request, so that is 750 seconds against a daily allowance of
+# 28,800 - about three per cent, or thirty-eight such flights a day. The
+# per-minute limit is 20 requests; the busiest minute of that flight was six.
+#
+# whisper-large-v3-turbo transcribes and nothing else, which is what the
+# Polish half of aliases.py wants. Use whisper-large-v3 if you want Groq to
+# translate instead, i.e. with [stt] task = "translate".
+model = "whisper-large-v3-turbo"
+
+api_key = ""
+api_key_env = "GROQ_API_KEY"
+
+timeout_seconds = 15.0
+slow_seconds = 6.0
+
+# A local model to fall back on when Groq cannot be reached - "small" costs
+# 464 MB on disk and keeps a dropped connection from costing you the flight.
+# Empty means no fallback: the command fails and says so in the panel, which
+# is at least not silent.
+fallback_model = ""
 
 [gemini]
 # Only used when backend or escalate_to is "gemini".

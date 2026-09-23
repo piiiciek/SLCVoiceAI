@@ -91,8 +91,8 @@ class Bridge:
         self._last_flight_state: dict | None = None
         self._last_withheld: tuple | None = None
         # Imported lazily: loading Whisper takes a while and pulls in CUDA.
-        from .stt import Transcriber
-        self.stt = Transcriber(cfg.stt)
+        from .stt import build as build_transcriber
+        self.stt = build_transcriber(cfg)
 
     def prescan(self) -> None:
         """Start reading SLC the moment the pilot presses the key.

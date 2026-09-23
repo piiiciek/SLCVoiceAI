@@ -26,6 +26,13 @@ class AudioConfig:
 
 @dataclass
 class SttConfig:
+    #: Where the speech is decoded. "local" runs faster-whisper on this
+    #: machine, which is free and works without a network but shares the
+    #: graphics card with the simulator. "groq" sends the clip away and gets
+    #: whisper-large-v3 every time regardless of what MSFS is holding - see
+    #: groq_stt.py, and the [groq] section below.
+    backend: str = "local"           # "local" or "groq"
+
     model: str = "auto"
     device: str = "auto"            # "auto", "cuda" or "cpu"
     compute_type: str = "auto"      # "auto", "int8" or "float16"
@@ -101,6 +108,30 @@ class LlmConfig:
 
 
 @dataclass
+class GroqSttConfig:
+    """Only used when [stt] backend = "groq"."""
+
+    #: whisper-large-v3-turbo transcribes and nothing else, which is exactly
+    #: what the Polish half of aliases.py wants. whisper-large-v3 is the one
+    #: that can also translate, if [stt] task = "translate".
+    model: str = "whisper-large-v3-turbo"
+
+    api_key: str = ""
+    api_key_env: str = "GROQ_API_KEY"
+
+    #: A flight is about two minutes of speech in total and each clip is a
+    #: couple of seconds, so anything past this is the network.
+    timeout_seconds: float = 15.0
+    slow_seconds: float = 6.0
+
+    #: A local model to fall back on when Groq cannot be reached, named
+    #: rather than chosen automatically - "small" costs 464 MB and keeps a
+    #: dropped connection from costing the flight. Empty means no fallback:
+    #: the command fails and says so, which is at least not silent.
+    fallback_model: str = ""
+
+
+@dataclass
 class SlcConfig:
     process_name: str = "SLC.exe"
     stream_export_dir: str = ""     # SLC Settings -> ExportStreamDataFolder
@@ -152,6 +183,7 @@ class Config:
     intent: IntentConfig = field(default_factory=IntentConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
+    groq: GroqSttConfig = field(default_factory=GroqSttConfig)
     slc: SlcConfig = field(default_factory=SlcConfig)
     behaviour: BehaviourConfig = field(default_factory=BehaviourConfig)
     ui: UiConfig = field(default_factory=UiConfig)
@@ -186,6 +218,11 @@ class Config:
     def gemini_key(self) -> str:
         return _resolve_key(self.gemini.api_key, self.gemini.api_key_env, "Gemini",
                             "https://aistudio.google.com/apikey")
+
+    @property
+    def groq_key(self) -> str:
+        return _resolve_key(self.groq.api_key, self.groq.api_key_env, "Groq",
+                            "https://console.groq.com/keys")
 
 
 #: Shapes of the keys we hand out instructions for, used only to spot one
@@ -244,6 +281,7 @@ _SECTIONS = {
     "intent": IntentConfig,
     "llm": LlmConfig,
     "gemini": GeminiConfig,
+    "groq": GroqSttConfig,
     "slc": SlcConfig,
     "behaviour": BehaviourConfig,
     "ui": UiConfig,

@@ -247,6 +247,40 @@ To see what `auto` would pick right now:
 python -m slcvoiceai --check-hardware
 ```
 
+### Decoding somewhere other than the graphics card
+
+`[stt] backend` chooses where speech is turned into text.
+
+**`local`** (default) runs faster-whisper here. Free, offline, no key — and
+sharing a card with the simulator, which is the difficulty the section above
+is entirely about.
+
+**`groq`** sends the clip to Groq instead. The card stays the simulator's and
+every command gets `whisper-large-v3` regardless of what MSFS is holding, so
+the whole question of what to start first stops existing. It is what BlueLine
+Realism does, for the same reason.
+
+It fits the free tier easily. Measured on a Kraków–Rome flight: 75 clips and
+147 seconds of speech in total. Groq bills a minimum of ten seconds per
+request, so that is 750 seconds against a daily allowance of 28,800 — about
+three per cent, or room for thirty-eight such flights a day. The busiest
+minute of that flight was six requests against a limit of twenty.
+
+What it costs, plainly: **the audio leaves the machine**, and a command spoken
+without a connection is lost rather than merely slow. `fallback_model` names a
+local model to drop back to when Groq cannot be reached; left empty, the
+command fails and says so rather than disappearing.
+
+```toml
+[stt]
+backend = "groq"
+
+[groq]
+model = "whisper-large-v3-turbo"   # transcribes only; large-v3 also translates
+api_key = ""                       # or the GROQ_API_KEY environment variable
+fallback_model = ""                # e.g. "small" for a local safety net
+```
+
 ## Matching intent: local first, cloud only if needed
 
 `[intent] backend` picks the matcher, and `escalate_to` decides who gets asked

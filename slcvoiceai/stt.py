@@ -158,6 +158,25 @@ def _resolve(cfg: SttConfig) -> tuple[str, str, str]:
     return model, device, compute_type
 
 
+def build(cfg) -> "Transcriber":
+    """The transcriber this config asks for.
+
+    Takes the whole Config rather than cfg.stt, because the Groq path needs a
+    key and keys are resolved at the top level - and because an unreadable
+    setting should be caught here, before a model is loaded, rather than at
+    the first press of the talk key.
+    """
+    backend = (cfg.stt.backend or "local").strip().lower()
+    if backend in ("", "local"):
+        return Transcriber(cfg.stt)
+    if backend == "groq":
+        from .groq_stt import GroqTranscriber
+        return GroqTranscriber(cfg.stt, cfg.groq, cfg.groq_key)
+    raise ValueError(
+        "Unknown [stt] backend {b!r}. Use \"local\" or \"groq\".".format(
+            b=cfg.stt.backend))
+
+
 class Transcriber:
     def __init__(self, cfg: SttConfig):
         from faster_whisper import WhisperModel
