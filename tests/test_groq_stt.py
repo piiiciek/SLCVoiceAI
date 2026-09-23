@@ -240,3 +240,30 @@ def test_an_unknown_backend_is_refused_before_anything_loads():
     with pytest.raises(ValueError, match="local"):
         import slcvoiceai.stt as stt
         stt.build(Config(stt=SttConfig(backend="cloud")))
+
+
+def test_the_request_identifies_itself(monkeypatch, cfg, groq):
+    """Groq sits behind Cloudflare, which rejects urllib's default
+    User-Agent outright. The reply is HTTP 403 carrying "error code: 1010",
+    which reads exactly like a rejected key - two perfectly good keys were
+    blamed for it before anyone read the body. Lose this header and every
+    command fails in a way that points at the wrong thing.
+    """
+    sent: list = []
+    answering(monkeypatch, {"text": "", "language": "polish"}, sent)
+    groq_stt.GroqTranscriber(cfg, groq, "k").transcribe(a_clip())
+    agent = sent[0].headers.get("User-agent", "")
+    assert agent and "urllib" not in agent.lower()
+    assert "SLCVoiceAI" in agent
+
+
+def test_a_refusal_quotes_what_the_server_said(monkeypatch, cfg, groq):
+    """401 and 403 cover quite different faults - a key that is wrong, and a
+    key that never got looked at. The body is the only thing that tells them
+    apart, so it has to reach the pilot."""
+    refusing(monkeypatch, groq_stt.urllib.error.HTTPError(
+        groq_stt.TRANSCRIBE_URL, 403, "no", {},
+        io.BytesIO(b"error code: 1010")))
+    with pytest.raises(Exception) as caught:
+        groq_stt.GroqTranscriber(cfg, groq, "k").transcribe(a_clip())
+    assert "1010" in str(caught.value)

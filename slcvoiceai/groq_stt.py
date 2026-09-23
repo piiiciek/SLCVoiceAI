@@ -50,6 +50,12 @@ TRANSLATES = ("whisper-large-v3",)
 #: the same number for its own timing check.
 RATE = 16000
 
+#: Groq sits behind Cloudflare, which rejects urllib's default
+#: User-Agent outright: the reply is HTTP 403 carrying "error code:
+#: 1010", which reads exactly like a bad key and is not one. Two
+#: perfectly good keys were blamed for it before the body was read.
+USER_AGENT = "SLCVoiceAI/1.0 (+https://github.com/piiiciek/SLCVoiceAI)"
+
 
 def to_wav(audio: np.ndarray, sample_rate: int) -> bytes:
     """A float32 mono clip as a 16-bit PCM WAV, in memory.
@@ -171,7 +177,9 @@ class GroqTranscriber:
             TRANSLATE_URL if translating else TRANSCRIBE_URL,
             data=body, method="POST",
             headers={"Authorization": "Bearer " + self._key,
-                     "Content-Type": content_type})
+                     "Content-Type": content_type,
+                     "Accept": "application/json",
+                     "User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(
                     request, timeout=self.groq.timeout_seconds) as reply:
@@ -199,10 +207,14 @@ class GroqTranscriber:
                 "does not come close to - so this is usually another program "
                 "on the same key. " + detail)
         if exc.code in (401, 403):
+            # Including what the server said, because the two codes cover
+            # quite different faults - a key that is wrong, a key that is
+            # right but not permitted - and the message is the only thing
+            # that tells them apart.
             return RuntimeError(
-                "Groq refused the key (HTTP {c}). Check groq_api_key in "
-                "config.toml, or the GROQ_API_KEY environment variable."
-                .format(c=exc.code))
+                "Groq refused the key (HTTP {c}): {d} Check groq_api_key "
+                "in config.toml, or the GROQ_API_KEY environment variable."
+                .format(c=exc.code, d=detail))
         return RuntimeError("Groq HTTP {c}: {d}".format(c=exc.code, d=detail))
 
     # -- when it does not work ----------------------------------------------
