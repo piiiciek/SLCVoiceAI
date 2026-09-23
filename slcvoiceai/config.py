@@ -79,6 +79,17 @@ class IntentConfig:
     #: local layer is confident, which is most of the time.
     escalate_to: str = "none"
 
+    #: And when to ask them.
+    #:
+    #: "ties"   - only when two buttons score level, or when a match was
+    #:            accepted on margin alone. Measured over 128 escalations:
+    #:            this is where the cloud earned its three seconds, breaking
+    #:            the tie differently 19 times out of 73.
+    #: "always" - also ask when nothing on screen came close. That path ran
+    #:            51 times, was refused 38 times, and after the furniture and
+    #:            alias work of 2026-09-23 has two real saves left in it.
+    escalate_when: str = "ties"
+
 
 @dataclass
 class LlmConfig:

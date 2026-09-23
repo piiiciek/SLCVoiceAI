@@ -48,6 +48,13 @@ class Decision(BaseModel):
     reasoning: str = Field(
         default="", description="One short sentence explaining the choice.",
     )
+    #: Why the offline matcher stopped, when it did - so the cascade can tell
+    #: the two kinds of failure apart without reading English back out of
+    #: `reasoning`. "ambiguous" means two buttons scored level and the tie is
+    #: worth a second opinion; "nothing_close" means nothing on screen
+    #: resembled the utterance, which a second opinion almost never fixes.
+    #: Empty on a decision that settled, and on anything the cloud returns.
+    gave_up: str = Field(default="", exclude=True)
 
 
 class Router(Protocol):
@@ -371,7 +378,8 @@ class FuzzyRouter:
         said = normalise(utterance)
         scored = self.rank(utterance, actions)
         if not scored:
-            return Decision(reasoning="Nothing matchable in that utterance.")
+            return Decision(gave_up="nothing_close",
+                             reasoning="Nothing matchable in that utterance.")
         best_score, best_index, best_action = scored[0]
         runner_up = scored[1][0] if len(scored) > 1 else 0.0
 
@@ -399,7 +407,7 @@ class FuzzyRouter:
                     reasoning="Exact match for {name!r}.".format(name=action.name),
                 )
             return Decision(
-                confidence=best_score,
+                confidence=best_score, gave_up="ambiguous",
                 reasoning="Ambiguous: {a!r} and {b!r} score almost the same.".format(
                     a=best_action.name, b=scored[1][2].name),
             )
@@ -410,7 +418,7 @@ class FuzzyRouter:
         decisive = best_score >= RELAXED_FLOOR and margin >= DECISIVE_MARGIN
         if best_score < self.min_confidence and not decisive:
             return Decision(
-                confidence=best_score,
+                confidence=best_score, gave_up="nothing_close",
                 reasoning="Too weak a match for {name!r} ({s:.2f}).".format(
                     name=best_action.name, s=best_score),
             )
@@ -523,7 +531,12 @@ class CascadeRouter:
     requests rather than one per command.
     """
 
-    def __init__(self, local: Router, cloud: Router, cloud_name: str):
+    def __init__(self, local: Router, cloud: Router, cloud_name: str,
+                 when: str = "ties"):
+        #: "ties" spends the round trip only on a tie or a shaky acceptance;
+        #: "always" also asks when nothing on screen came close. See
+        #: `_worth_asking` for why the default is not "always".
+        self.when = when
         self.local = local
         self.cloud = cloud
         self.cloud_name = cloud_name
@@ -543,6 +556,10 @@ class CascadeRouter:
         if not actions:
             return decision
 
+        if not self._worth_asking(decision):
+            log.info("Not asking %s: %s", self.cloud_name, decision.reasoning)
+            return decision
+
         if decision.action_index is None:
             log.info("Offline matcher unsure (%s) - asking %s",
                      decision.reasoning, self.cloud_name)
@@ -556,6 +573,35 @@ class CascadeRouter:
             # local accept - that is the point of asking.
             return escalated if escalated.reasoning else decision
         return escalated
+
+    def _worth_asking(self, decision: Decision) -> bool:
+        """Is this failure one the cloud has ever been any use on?
+
+        The two ways the offline matcher gives up are not alike, and the logs
+        to 2026-09-23 separate them cleanly across 128 escalations:
+
+        * **a tie** - two buttons scoring level (73 escalations). The cloud
+          broke it with a different answer 19 times. This is the case it is
+          actually good at: it can see that "tell them to sit down" is about
+          passengers and not about the flight phase, which no amount of
+          string similarity will.
+
+        * **nothing close** - the best score on screen was below the floor
+          (51 escalations). The cloud refused 38 of those and overrode 6, and
+          of the 6, three were panel furniture that is no longer offered at
+          all and one was `nevermind` -> DISREGARD, which the alias table now
+          settles by itself. That leaves two real saves in fifty-one, bought
+          with three seconds of waiting on every one.
+
+        So the default asks on a tie and on a shaky acceptance, and answers
+        "nothing close" itself, immediately. That is also the better answer
+        to give: app.py names the button that was missing and the key the
+        pilot has bound to reach it, which arrives now instead of after the
+        round trip. Set escalate_when = "always" to restore the old cascade.
+        """
+        if self.when == "always":
+            return True
+        return decision.gave_up != "nothing_close"
 
     @property
     def min_confidence(self) -> float:
@@ -603,6 +649,11 @@ def build_router(cfg: Config) -> Router:
                     "%s alone", escalate, exc, backend)
         return local
 
-    log.info("Intent pipeline: %s offline, escalating to %s when unsure",
-             backend, escalate)
-    return CascadeRouter(local, cloud, escalate)
+    when = cfg.intent.escalate_when.strip().lower()
+    if when not in ("ties", "always"):
+        log.warning("[intent] escalate_when = %r is not 'ties' or 'always'; "
+                    "using 'ties'.", cfg.intent.escalate_when)
+        when = "ties"
+    log.info("Intent pipeline: %s offline, escalating to %s on %s",
+             backend, escalate, "a tie" if when == "ties" else "anything unsure")
+    return CascadeRouter(local, cloud, escalate, when)

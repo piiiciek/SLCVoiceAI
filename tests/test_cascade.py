@@ -138,3 +138,73 @@ def test_threshold_slider_reaches_the_local_matcher(cascade):
     cascade.min_confidence = 0.8
     assert cascade.min_confidence == pytest.approx(0.8)
     assert cascade.local.min_confidence == pytest.approx(0.8)
+
+
+# -- what the cloud is actually asked about --------------------------------
+
+def nothing_close() -> Decision:
+    """What the fuzzy matcher returns when the best button on screen is well
+    under the floor - 'hello' against a list with no HELLO? on it."""
+    return Decision(confidence=0.40, gave_up="nothing_close",
+                    reasoning="Too weak a match for 'Check List' (0.40).")
+
+
+def a_tie() -> Decision:
+    return Decision(confidence=0.50, gave_up="ambiguous",
+                    reasoning="Ambiguous: 'Tannoy' and 'P A SYSTEM >' score "
+                              "almost the same.")
+
+
+def test_nothing_close_is_answered_here_and_not_asked_about(cloud, actions):
+    """Over 51 such escalations the cloud refused 38 and overrode 6, and of
+    the 6, three were panel furniture no longer on offer and one is now an
+    alias. Two real saves, three seconds of waiting on every one of the 51.
+    """
+    cascade = CascadeRouter(StubLocal(nothing_close()), cloud, "gemini")
+    decision = cascade.decide("hello", actions)
+    assert cloud.calls == 0
+    assert decision.action_index is None
+    assert "Too weak" in decision.reasoning, (
+        "the pilot still has to be told why, and it is the local reason")
+
+
+def test_a_tie_is_still_worth_asking_about(cloud, actions):
+    """19 of the cloud's 26 overrides came from this path. It is the case it
+    is genuinely good at: which of two level-scoring buttons the sentence is
+    actually about is not a question about spelling."""
+    cascade = CascadeRouter(StubLocal(a_tie()), cloud, "gemini")
+    decision = cascade.decide("cockpit to the passengers", actions)
+    assert cloud.calls == 1
+    assert decision.action_index == 2
+
+
+def test_a_weak_accept_is_still_worth_asking_about(cloud, actions):
+    local = StubLocal(Decision(action_index=0, confidence=0.62,
+                               reasoning="Closest match to 'ROGER'."))
+    cascade = CascadeRouter(local, cloud, "gemini")
+    cascade.decide("alright everyone lets get going", actions)
+    assert cloud.calls == 1
+
+
+def test_always_restores_the_old_cascade(cloud, actions):
+    cascade = CascadeRouter(StubLocal(nothing_close()), cloud, "gemini",
+                            "always")
+    assert cascade.decide("hello", actions).action_index == 2
+    assert cloud.calls == 1
+
+
+def test_an_unmatchable_utterance_is_never_sent(cloud, actions):
+    """Whisper hands back punctuation and filler often enough that this is
+    not hypothetical; there is nothing in it for anyone to route."""
+    cascade = CascadeRouter(FuzzyRouter(0.65), cloud, "gemini")
+    cascade.decide("...", actions)
+    assert cloud.calls == 0
+
+
+def test_the_fuzzy_matcher_says_which_kind_of_failure_it_was(actions):
+    """The cascade must not have to read English back out of `reasoning`."""
+    fuzzy = FuzzyRouter(0.65)
+    assert fuzzy.decide("hello there my friend", actions).gave_up == "nothing_close"
+    assert fuzzy.decide("roger", actions).gave_up == "", (
+        "a decision that settled has nothing to explain"
+    )

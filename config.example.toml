@@ -22,6 +22,21 @@ backend = "fuzzy"
 # Escalation needs a key - set it in the [gemini] section further down.
 escalate_to = "none"
 
+# And when to spend that round trip, which costs about three seconds.
+#
+#   "ties"   - only when two buttons score level, or when a match scraped in
+#              on margin alone.
+#   "always" - also when nothing on screen came close.
+#
+# Measured over 128 escalations in real flights: on a tie the cloud answered
+# differently 19 times out of 73, which is what it is for. On "nothing came
+# close" it ran 51 times, refused 38 of them, and what is left after the
+# furniture and alias work is two useful saves - for two and a half minutes
+# of waiting spread across the flight. When nothing on screen resembles what
+# you said, the bridge now tells you so at once, and names the button that is
+# missing along with the key you have bound to reach it.
+escalate_when = "ties"
+
 [audio]
 # Push-to-talk key for the BRIDGE. Keep it separate from SLC's own PTT key
 # (SLC defaults to LeftCtrl) so the two never fight over the same press.

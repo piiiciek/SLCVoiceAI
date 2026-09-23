@@ -272,12 +272,33 @@ yet written. That is what escalation is for.
 [intent]
 backend = "fuzzy"
 escalate_to = "gemini"    # none | gemini | claude
+escalate_when = "ties"    # ties | always
 ```
 
 Most commands are unambiguous — "roger", "connect the jetway", "intercom" —
 and resolve offline at full confidence with **nothing sent anywhere**. Only the
 awkward ones travel. In a logged flight that was a handful of utterances, not
 one per command, which is what keeps it inside a free tier.
+
+`escalate_when` decides which kind of awkward is worth three seconds, and the
+two kinds are not alike. Measured over 128 escalations:
+
+| the offline matcher gave up because | how often | cloud refused | cloud answered differently |
+|---|---|---|---|
+| two buttons scored level | 73 | 50 | **19** |
+| nothing on screen came close | 51 | 38 | 6 |
+
+A tie is a question about meaning — whether "tell them to sit down" is about
+the passengers or the flight phase — and the cloud is good at it. "Nothing
+came close" is usually the truth: you said something that is not a command for
+what is on screen. Of those six overrides, three pressed panel furniture that
+is no longer offered at all and one was *"nevermind"* → `DISREGARD`, which the
+alias table now settles by itself.
+
+So the default asks on a tie and answers the other case itself, immediately —
+and it is the better answer, because it names the button that is missing and
+the key you have bound to reach it instead of arriving three seconds later
+with a shrug. `escalate_when = "always"` restores the old behaviour.
 
 The log says which path each command took:
 
