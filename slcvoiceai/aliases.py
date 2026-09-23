@@ -372,6 +372,306 @@ ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+# --------------------------------------------------------------------------
+# The same table, in the language the pilot actually speaks.
+#
+# Everything above is English because of one setting: [stt] task = "translate"
+# makes Whisper turn Polish into English before the matcher ever sees it, so
+# the phrasings worth listing were whatever the translator happened to
+# produce. That is a poor foundation. "mozecie tankowac" came back as
+# "boarding", as "can you pass the bus to tank?", and as "you can refuel" on
+# three different days, and each new spelling needed its own entry.
+#
+# BlueLine Realism does not do this. Its Polish pack maps Polish straight to
+# the command - `CODE2_BACKUP | wsparc` - and never translates at all. The
+# reason SLCVoiceAI could not was mechanical rather than deliberate:
+# normalise() used to delete accented letters, so "mozecie" arrived as
+# "mo ecie" and no Polish entry could ever have fired. intent.fold() fixes
+# that, and this table is what it makes possible.
+#
+# With task = "transcribe" these are matched against what was really said.
+# They stay harmless under "translate" - English in, English out, and none of
+# this fires - so both settings work and neither needs the other.
+#
+# Written in the forms a captain actually uses: imperative, usually plural,
+# addressed to the crew. Note that the coverage guard in intent.py compares
+# whole words and Polish inflects them, so the singular and the plural of an
+# order are separate entries, for the same reason "im listening" and "i am
+# listening" are two strings above.
+POLISH: dict[str, tuple[str, ...]] = {
+    # --- acknowledgement -------------------------------------------------
+    "roger": ("rozumiem", "zrozumiałem", "przyjąłem", "przyjęte", "jasne",
+              "dobrze", "w porządku", "dobra", "okej", "przyjmuję",
+              "dziękuję za informację", "dzięki za informację"),
+    "will do": ("zrobi się", "wykonam", "zrobimy", "oczywiście"),
+    "thank you": ("dziękuję", "dzięki", "dziękujemy", "dziękuję bardzo",
+                  "wielkie dzięki", "dzięki wielkie"),
+    "thanks very much": ("dziękuję bardzo", "bardzo dziękuję"),
+    "no problem": ("nie ma sprawy", "nie ma problemu", "żaden problem",
+                   "spoko"),
+    "feeling fine": ("wszystko w porządku", "wszystko dobrze", "wszystko gra",
+                     "czuję się dobrze", "bez zarzutu", "wszystko okej",
+                     "u mnie w porządku", "wszystko jest w porządku"),
+
+    # --- radio discipline ------------------------------------------------
+    "go ahead": ("słucham", "mów", "mówcie", "możesz mówić", "możecie mówić",
+                 "proszę mówić", "śmiało", "kontynuuj", "kontynuujcie",
+                 "dawaj", "tak słucham", "słuchamy", "zamieniam się w słuch"),
+    "standby": ("czekaj", "czekajcie", "poczekaj", "poczekajcie", "chwila",
+                "chwileczkę", "moment", "momencik", "sekundę", "chwilę"),
+    "repeat transmission": ("powtórz", "powtórzcie", "jeszcze raz",
+                            "nie zrozumiałem", "nie dosłyszałem",
+                            "możesz powtórzyć", "powtórz proszę"),
+    "disregard": ("nieważne", "nieistotne", "zapomnij", "już nic",
+                  "odwołuję", "nic takiego"),
+    "radio check": ("próba radia", "sprawdzam radio", "kontrola radia",
+                    "jak mnie słychać", "jak mnie słyszysz", "słyszysz mnie"),
+    "loud and clear": ("głośno i wyraźnie", "pięć na pięć", "słyszę dobrze",
+                       "dobrze cię słyszę", "czysto", "wyraźnie"),
+
+    # --- opening a channel -----------------------------------------------
+    "ground crew": ("obsługa naziemna", "załoga naziemna", "ziemia",
+                    "kokpit do obsługi", "kokpit do ziemi", "do obsługi"),
+    "intercom": ("interkom", "do kabiny", "kokpit do kabiny",
+                 "łączę się z kabiną", "połącz z kabiną"),
+    "purser to intercom": ("szef pokładu", "poproś szefa pokładu",
+                           "stewardesa do interkomu", "szefa pokładu proszę",
+                           "połącz mnie ze stewardesą"),
+    "cabin crew to intercom": ("załoga do interkomu", "obsługa do interkomu"),
+    "p a system": ("ogłoszenie", "do pasażerów", "system nagłośnienia",
+                   "chcę ogłosić", "mówię do pasażerów", "nagłośnienie"),
+    "phone": ("telefon", "dzwonię", "zadzwoń"),
+
+    # --- the turnaround --------------------------------------------------
+    "start boarding": ("zaczynajcie boarding", "zaczynamy boarding",
+                       "możecie wpuszczać pasażerów", "wpuszczajcie pasażerów",
+                       "rozpocznijcie boarding", "możecie zaczynać boarding"),
+    "start boarding when ready": ("boarding kiedy będziecie gotowi",
+                                  "zaczynajcie jak będziecie gotowi"),
+    "ready to start boarding": ("gotowi do boardingu", "gotowy na boarding"),
+    "request loading update": ("jak idzie załadunek", "status załadunku",
+                               "jak wygląda załadunek", "co z załadunkiem"),
+    "request offloading update": ("jak idzie rozładunek",
+                                  "co z rozładunkiem"),
+    "open the doors": ("otwórzcie drzwi", "otwórz drzwi", "możecie otworzyć"),
+    "please close the doors": ("zamknijcie drzwi", "zamknij drzwi",
+                               "możecie zamykać drzwi"),
+    "connect jetway": ("podłączcie rękaw", "podłącz rękaw", "rękaw proszę",
+                       "podstawcie rękaw", "podłączcie most"),
+    "disconnect jetway": ("odłączcie rękaw", "odłącz rękaw",
+                          "zabierzcie rękaw", "możecie zabrać rękaw"),
+    "connect stairs": ("podstawcie schody", "podłączcie schody",
+                       "schody proszę"),
+    "disconnect stairs": ("zabierzcie schody", "odsuńcie schody"),
+    "start catering": ("możecie zacząć catering", "catering proszę",
+                       "zaczynajcie catering", "dostawa cateringu"),
+    "start refuelling": ("możecie tankować", "tankujcie",
+                         "zaczynajcie tankowanie", "rozpocznijcie tankowanie",
+                         "prośba o tankowanie", "możecie zacząć tankowanie",
+                         "zatankujcie", "proszę o tankowanie"),
+    "start deboarding": ("możecie wysadzać", "zaczynajcie wysadzanie",
+                         "wysadzamy pasażerów"),
+    "start deicing": ("możecie odladzać", "odladzanie",
+                      "zaczynajcie odladzanie"),
+
+    # --- getting moving --------------------------------------------------
+    "ready for pushback": ("gotowi do wypychania", "gotowy do pushbacku",
+                           "gotowi do pushbacku"),
+    "start pushback": ("wypychajcie", "zaczynajcie wypychanie",
+                       "możecie wypychać"),
+    "stop pushback": ("zatrzymajcie wypychanie", "stop wypychanie"),
+    "parking brake released": ("hamulec zwolniony", "zwolniłem hamulec",
+                               "hamulec postojowy zwolniony"),
+    "parking brake is set": ("hamulec zaciągnięty", "zaciągnąłem hamulec",
+                             "hamulec postojowy zaciągnięty",
+                             "hamulec ustawiony"),
+    "ready to go now": ("jesteśmy gotowi", "gotowi do drogi", "możemy jechać"),
+    "starting the apu": ("uruchamiam apu", "włączam apu", "startuję apu"),
+    "hotel startup": ("uruchomienie na hotelu", "start na hotelu"),
+    "please disconnect gpu": ("odłączcie zasilanie", "odłączcie gpu",
+                              "możecie odłączyć zasilanie"),
+    "single engine taxi": ("kołowanie na jednym silniku",
+                           "jeden silnik do kołowania"),
+    "release the cabin crew": ("zwalniam załogę", "załoga może wstać",
+                               "możecie wstać", "zwalniam obsługę"),
+
+    # --- the cabin -------------------------------------------------------
+    # SLC offers both of these, and they mean nearly the same thing, so
+    # the two sets of words are kept apart on purpose: token_set_ratio
+    # scores a subset as a perfect match, so one shared phrase in both
+    # families ties them at 1.00 and the command is refused. Asking for
+    # places goes to one, telling people to sit goes to the other.
+    "seats for takeoff": ("zajmijcie miejsca", "zajmijcie swoje miejsca",
+                          "miejsca do startu", "prosze zajac miejsca",
+                          "przygotujcie się do startu"),
+    "be seated for takeoff": ("siadajcie", "usiądźcie", "zaraz startujemy",
+                              "siadajcie do startu", "usiądźcie do startu",
+                              "startujemy"),
+    "take seats for landing": ("zajmijcie miejsca do lądowania",
+                               "siadajcie do lądowania", "zaraz lądujemy"),
+    "be seated for landing": ("usiądźcie do lądowania",
+                              "lądujemy zajmijcie miejsca"),
+    "prepare cabin for landing": ("przygotujcie kabinę do lądowania",
+                                  "kabina do lądowania",
+                                  "przygotujcie kabinę"),
+    "welcome aboard": ("witamy na pokładzie", "dzień dobry państwu",
+                       "witam na pokładzie"),
+    "seatbelts": ("pasy", "zapnijcie pasy", "włączam pasy",
+                  "sygnał zapiąć pasy"),
+    "toggle doors": ("przełącz drzwi",),
+    "please be seated": ("proszę usiąść", "proszę zająć miejsca"),
+    "please remain seated": ("proszę pozostać na miejscach",
+                             "proszę nie wstawać"),
+    "relax and enjoy": ("życzę miłego lotu", "miłego lotu",
+                        "życzymy miłego lotu"),
+    "listen to instructions": ("proszę słuchać instrukcji",
+                               "słuchajcie instrukcji"),
+
+    # --- the flight ------------------------------------------------------
+    "descent starting": ("zaczynamy zniżanie", "rozpoczynamy zniżanie",
+                         "schodzimy", "zaczynamy schodzić"),
+    "descending soon": ("niedługo zaczniemy zniżanie", "wkrótce zniżanie"),
+    "descending shortly": ("za chwilę zaczniemy zniżanie",
+                           "zaraz zaczniemy zniżanie"),
+    "started our descent": ("zaczęliśmy zniżanie", "jesteśmy w zniżaniu"),
+    "to airport": ("na lotnisko", "do lotniska"),
+    "perfect": ("świetnie", "doskonale", "super", "idealnie"),
+    "hows it going": ("jak leci", "jak tam", "jak idzie"),
+    "how are the passengers": ("jak pasażerowie", "jak się mają pasażerowie",
+                               "co u pasażerów"),
+
+    # --- delays ----------------------------------------------------------
+    "sorry for the delay": ("przepraszam za opóźnienie",
+                            "przepraszamy za opóźnienie"),
+    "apologies": ("przepraszam", "przepraszamy"),
+    "thats my bad": ("moja wina", "mój błąd"),
+    "were running behind": ("jesteśmy opóźnieni", "mamy opóźnienie"),
+    "atc delay": ("opóźnienie od kontroli", "kontrola nas trzyma"),
+    "no departure delay": ("bez opóźnienia", "startujemy o czasie"),
+    "short delay expected": ("krótkie opóźnienie", "niewielkie opóźnienie"),
+    "medium delay expected": ("średnie opóźnienie",),
+    "extended delay expected": ("duże opóźnienie", "dłuższe opóźnienie"),
+
+    # --- plain answers ---------------------------------------------------
+    "yes": ("tak", "oczywiście", "zgoda", "pozwalam", "zezwalam"),
+    "no": ("nie", "niestety nie", "odmawiam"),
+    "not at the moment": ("nie teraz", "na razie nie", "może później"),
+    "hangup": ("rozłączam", "kończę", "rozłączam się"),
+    "back": ("wstecz", "cofnij", "wróć", "powrót"),
+}
+
+# One table from here on. Polish entries are appended rather than replacing
+# anything, so a button keeps every English phrasing it had: the pilot may
+# switch [stt] task between "transcribe" and "translate", and half a flight
+# can arrive in each if listening is switched off and on.
+for _key, _forms in POLISH.items():
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+# A second pass, written against the buttons SLC actually offered across the
+# logged flights rather than against the English table above - the first pass
+# covered 45 of the 100, and the ones it missed are not rare: HELLO?, the
+# engine start calls, the cabin service requests, every arrival-time phrase.
+# A gap here is not a slower command, it is a refused one, because the
+# cascade no longer asks the cloud when nothing came close.
+POLISH_MORE: dict[str, tuple[str, ...]] = {
+    # --- opening a conversation ------------------------------------------
+    "hello": ("halo", "dzień dobry", "jest tam kto", "słyszycie mnie",
+              "kokpit"),
+    "thanks": ("dzięki", "dziękuję"),
+    "forgot what i needed": ("zapomniałem czego chciałem",
+                             "już nie pamiętam", "nieważne zapomniałem"),
+    "ill speak to you later": ("pogadamy później", "odezwę się później"),
+    "ill call when were ready": ("zadzwonię jak będziemy gotowi",
+                                 "odezwę się jak będziemy gotowi"),
+
+    # --- the flight deck --------------------------------------------------
+    "starting engine 1": ("uruchamiam pierwszy silnik",
+                          "startuję pierwszy silnik", "silnik jeden"),
+    "starting engine 2": ("uruchamiam drugi silnik",
+                          "startuję drugi silnik", "silnik dwa"),
+    "cockpit secured": ("kokpit zabezpieczony", "zabezpieczyłem kokpit"),
+    "awaiting the loadsheet": ("czekam na loadsheet", "czekamy na loadsheet",
+                               "czekam na dokumenty"),
+    "pushback not required": ("wypychanie niepotrzebne",
+                              "nie potrzebujemy wypychania"),
+    "instant boarding": ("boarding od razu", "natychmiastowy boarding"),
+    "clear to deboard": ("można wysadzać", "możecie wysadzać pasażerów",
+                         "zgoda na wysadzanie"),
+
+    # --- the slide pins ---------------------------------------------------
+    # SLC shows these as "THANKS, PIN LEFT" / "THANKS, PIN RIGHT" once the
+    # doors are disarmed; the pilot is acknowledging one side at a time.
+    "pin left": ("zawleczka z lewej", "lewa zawleczka", "lewa strona"),
+    "pin right": ("zawleczka z prawej", "prawa zawleczka", "prawa strona"),
+    "armed": ("uzbrojone", "zazbrojone"),
+    "closed": ("zamknięte",),
+    "open": ("otwarte",),
+
+    # --- the cruise -------------------------------------------------------
+    "were climbing to cruise": ("wznosimy się na poziom przelotowy",
+                                "wznosimy się", "idziemy na poziom"),
+    "normal cruise": ("normalny przelot", "zwykły przelot",
+                      "standardowy przelot"),
+    "brief cruise": ("krótki przelot", "krótki lot"),
+
+    # --- punctuality ------------------------------------------------------
+    "were on time": ("jesteśmy o czasie", "lecimy o czasie"),
+    "on schedule": ("zgodnie z planem", "zgodnie z rozkładem"),
+    "a little delayed": ("lekko opóźnieni", "trochę spóźnieni"),
+    "running late": ("spóźniamy się", "jesteśmy spóźnieni"),
+
+    # --- time to go -------------------------------------------------------
+    # Separate keys per number: the matcher compares whole words, so "za
+    # dwadziescia minut" must not be allowed to score against the ten-minute
+    # button on the strength of "za" and "minut".
+    "5 mins until descent": ("pięć minut do zniżania",),
+    "10 mins until descent": ("dziesięć minut do zniżania",),
+    "15 mins until descent": ("piętnaście minut do zniżania",),
+    "20 mins until descent": ("dwadzieścia minut do zniżania",),
+    "25 mins until descent": ("dwadzieścia pięć minut do zniżania",),
+    "30 mins until descent": ("trzydzieści minut do zniżania",),
+    "arriving in 10 minutes": ("lądujemy za dziesięć minut",
+                               "za dziesięć minut na miejscu"),
+    "arriving in 15 minutes": ("lądujemy za piętnaście minut",),
+    "arriving in 20 minutes": ("lądujemy za dwadzieścia minut",),
+    "arriving in 30 minutes": ("lądujemy za trzydzieści minut",
+                               "za pół godziny lądujemy"),
+    "arriving in 40 minutes": ("lądujemy za czterdzieści minut",),
+
+    # --- the cabin looking after the pilot --------------------------------
+    "can i have some coffee": ("poproszę kawę", "kawa poproszę",
+                               "chętnie napiłbym się kawy"),
+    "can i have some tea": ("poproszę herbatę", "herbata poproszę"),
+    "can i have some water": ("poproszę wodę", "woda poproszę",
+                              "poproszę o wodę"),
+    "can i have a snack": ("poproszę coś do jedzenia", "poproszę przekąskę"),
+
+    # --- the music --------------------------------------------------------
+    "turn the music on": ("włączcie muzykę", "włącz muzykę"),
+    "turn the music off": ("wyłączcie muzykę", "wyłącz muzykę"),
+    "turn the music up": ("głośniej muzykę", "podgłośnijcie muzykę"),
+    "turn the music down": ("ciszej muzykę", "ściszcie muzykę"),
+    "up a bit more": ("jeszcze trochę głośniej", "troszkę głośniej"),
+    "down a bit more": ("jeszcze trochę ciszej", "troszkę ciszej"),
+
+    # --- announcements ----------------------------------------------------
+    "ladies and gentlemen": ("szanowni państwo", "drodzy państwo",
+                             "panie i panowie", "witam państwa"),
+
+    # --- the jetway, from the ground crew's side --------------------------
+    "ill ask for a jetway": ("poproszę o rękaw", "zamówię rękaw"),
+    "ill remove the jetway": ("zabiorę rękaw", "usunę rękaw"),
+    # One of the three toolbar icons that survive is_chrome, because it
+    # changes the aircraft rather than the panel: jetway or stairs.
+    "toggle door mode": ("tryb schodów", "przełącz na schody",
+                         "tryb rękawa", "przełącz na rękaw"),
+}
+
+for _key, _forms in POLISH_MORE.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
 def aliases_for(button_name: str) -> tuple[str, ...]:
     """Every alias phrase registered for this button name.
 

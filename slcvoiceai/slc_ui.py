@@ -51,6 +51,10 @@ DENYLIST = (
     # Opens the window WINDOW_DENYLIST already refuses to read. Pressing it
     # can only put a panel on screen that the bridge then ignores.
     "audio manager",
+    # Usually icon-only, and then is_chrome has it - but SLC gave it a real
+    # name in capitals on 2026-09-21 and it went straight through, because
+    # a name in capitals is exactly what a phrase button looks like.
+    "settings",
 )
 
 #: Windows that are configuration or meta UI rather than flight controls.

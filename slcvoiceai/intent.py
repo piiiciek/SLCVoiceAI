@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from typing import Optional, Protocol
 
 from pydantic import BaseModel, Field
@@ -96,6 +97,31 @@ _UTTERANCE_FILLER = {"very", "much", "really", "quite", "please"}
 _PUNCT = re.compile(r"[^a-z0-9 ]+")
 #: Straight and curly, because Whisper uses both.
 _APOSTROPHE = re.compile(r"[’']")
+
+#: Letters NFKD will not take apart, because they are letters in their own
+#: right rather than a letter carrying a mark. Polish "l with stroke" is the
+#: one that matters here; the rest are cheap insurance for the other
+#: languages the panel already speaks.
+_STANDALONE = str.maketrans({
+    "ł": "l",   # l stroke
+    "ø": "o", "đ": "d", "ð": "d", "ħ": "h",
+    "æ": "ae", "œ": "oe", "ß": "ss", "þ": "th",
+})
+
+
+def fold(text: str) -> str:
+    """Accented letters to their plain ones: zolw -> zolw, not z lw.
+
+    _PUNCT below replaces everything outside [a-z0-9 ], which for an
+    accented letter means replacing it with a space - so "mozecie" arrived
+    at the matcher as "mo ecie", two words, neither of them a word. Every
+    Polish word carrying one of these was cut in half before anything had a
+    chance to match it, which is the whole reason the alias table is written
+    in English: a Polish entry could never have fired.
+    """
+    lowered = text.lower().translate(_STANDALONE)
+    return "".join(c for c in unicodedata.normalize("NFKD", lowered)
+                   if not unicodedata.combining(c))
 
 #: Fraction of an alias's own words that must appear in the utterance before
 #: that alias is allowed to stand in for its button. Guards against short
@@ -197,7 +223,7 @@ def normalise(text: str, spoken: bool = True) -> str:
     # fine", "didnt catch that"), so no alias holding a contraction could
     # fire at all. Whisper writes them both ways from one utterance to the
     # next, and this is what makes the two spellings the same word.
-    text = _PUNCT.sub(" ", _APOSTROPHE.sub("", text.lower()))
+    text = _PUNCT.sub(" ", _APOSTROPHE.sub("", fold(text)))
     drop = _NOISE | _UTTERANCE_FILLER if spoken else _NOISE
     words = [w for w in text.split() if w and w not in drop]
     return " ".join(words)

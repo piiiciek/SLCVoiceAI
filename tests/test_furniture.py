@@ -152,8 +152,11 @@ def test_exploring_still_sees_the_whole_panel(monkeypatch):
     """--list-actions has to agree with the screen, or it stops being a
     diagnostic."""
     controls = [FakeControl(automation_id=ident) for ident, _ in FURNITURE]
-    assert offering(monkeypatch, controls, include_chrome=True) == [
-        label for _, label in FURNITURE]
+    # Except what the denylist refuses outright, which has never been
+    # listed here and is not part of this rule.
+    expected = [label for _, label in FURNITURE
+                if not slc_ui.is_denied(label)]
+    assert offering(monkeypatch, controls, include_chrome=True) == expected
     assert offering(monkeypatch, controls) == []
 
 
@@ -166,10 +169,15 @@ def test_the_toggles_are_offered_among_the_speech(monkeypatch):
     assert offering(monkeypatch, controls) == ["GO AHEAD", "Seatbelts"]
 
 
-def test_audio_manager_is_refused(monkeypatch):
-    """It has a real name, in capitals, so the furniture rule cannot see it -
-    but all it does is open the window WINDOW_DENYLIST already refuses."""
-    assert slc_ui.is_denied("AUDIO MANAGER")
-    controls = [FakeControl(name="AUDIO MANAGER", automation_id="cmdAudioManager"),
+@pytest.mark.parametrize("label", ["AUDIO MANAGER", "SETTINGS"])
+def test_a_window_opener_in_capitals_is_refused(monkeypatch, label):
+    """A real name, in capitals, so the furniture rule cannot see it - and
+    all it does is open a window WINDOW_DENYLIST already refuses.
+
+    SETTINGS is normally icon-only and is_chrome has it; on 2026-09-21 SLC
+    gave it a name in capitals and it went straight through, which is what
+    a name in capitals is supposed to mean."""
+    assert slc_ui.is_denied(label)
+    controls = [FakeControl(name=label, automation_id="cmdWhatever"),
                 FakeControl(name="ROGER", automation_id="cmdPlayCaptainRoger")]
     assert offering(monkeypatch, controls) == ["ROGER"]

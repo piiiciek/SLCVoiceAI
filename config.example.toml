@@ -85,6 +85,18 @@ model = "auto"
 device = "auto"          # "auto", "cuda" or "cpu"
 compute_type = "auto"    # "auto", "int8" or "float16"
 
+# "translate" makes Whisper turn what you said into English before anything
+# else sees it. SLC's buttons are English, so that looked like the obvious
+# choice - but it puts a lossy step in front of every command, and the larger
+# the model the better it hides how lossy. On a small model it is brutal:
+# "mozecie tankowac" came back as "can you pass the bus to tank?".
+#
+# "transcribe" keeps your own words, and aliases.py now carries the Polish to
+# match them - the same thing BlueLine Realism does with its Polish pack.
+# Worth knowing: on "transcribe" the button names themselves stop helping,
+# because "GSX, START REFUELLING" shares no letters with anything you say, so
+# every match comes from the alias table. If you speak English, leave this on
+# "translate" - it costs nothing and the button names do the work.
 task = "translate"
 
 # "" = autodetect the spoken language (recommended). Force it to "pl" if

@@ -263,6 +263,31 @@ arrives from Whisper as *"I understand"*, which shares no letters at all with
 `ROGER`. Add your own there; each entry is scored alongside the button's real
 name.
 
+### Speaking a language SLC does not
+
+There are two ways to bridge the gap, and `[stt] task` picks between them.
+
+**`translate`** asks Whisper for English and matches that against the English
+buttons. It is the simpler path and it needs no alias at all for a button
+whose name you can more or less say. What it costs is a lossy step in front of
+every command, and one you cannot see: on a large model the translation is
+good enough that the seams do not show, and on a small one *"możecie
+tankować"* arrives as *"can you pass the bus to tank?"*. Worse, it is not
+stable — the same Polish sentence came back three different ways on three
+days, and each spelling needed its own alias.
+
+**`transcribe`** keeps your own words and matches them against the Polish half
+of `aliases.py`, which is what BlueLine Realism does with its language packs.
+Nothing is translated and nothing drifts. The catch is that the button names
+stop helping — `GSX, START REFUELLING` shares no letters with anything you
+say — so every match has to come from the table. It currently covers 95 of the
+100 buttons seen across the logged flights; the five it misses are status
+labels rather than commands.
+
+If you speak English, leave it on `translate`. If you do not, `transcribe`
+plus a table in your own language is the better of the two, and adding a
+language means adding a dict to `aliases.py` rather than touching any code.
+
 What it cannot do is follow phrasing with no shared vocabulary and no alias
 yet written. That is what escalation is for.
 
