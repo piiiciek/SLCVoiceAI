@@ -56,13 +56,20 @@ def main(argv: list[str] | None = None) -> int:
         if not ui.is_running():
             print("SLC is not running.")
             return 1
-        actions = ui.list_actions()
+        # include_chrome: this is the diagnostic view, so it shows what the
+        # routing path refuses as well, marked. Hiding it here would make the
+        # tool disagree with the screen.
+        actions = ui.list_actions(include_chrome=True)
         if not actions:
             print("SLC is running but offering no invokable controls right now.")
             return 0
+        from .slc_ui import is_chrome
         for i, action in enumerate(actions):
-            print("{i:>3}. {name}   [{ctype}]   window={win}".format(
-                i=i, name=action.name, ctype=action.control_type, win=action.window))
+            mark = "  (furniture, not offered)" if is_chrome(
+                action.name, action.automation_id) else ""
+            print("{i:>3}. {name}   [{ctype}]   window={win}{mark}".format(
+                i=i, name=action.name, ctype=action.control_type,
+                win=action.window, mark=mark))
         return 0
 
     if args.gui:

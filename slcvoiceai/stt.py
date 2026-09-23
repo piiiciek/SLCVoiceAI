@@ -288,9 +288,23 @@ class Transcriber:
         seconds = frames / float(self._RATE)
         if took < max(self._STALL_FLOOR, seconds * self._STALL_FACTOR):
             return
-        log.warning(
-            "That took %.0fs to decode %.1fs of audio - %.0f times longer "
-            "than it should. Whisper is on %s and something else is using "
-            "it, almost always the simulator. Start SLCVoiceAI before the "
-            "simulator, or set [stt] device = \"cpu\" to be unaffected by "
-            "it.", took, seconds, took / max(seconds, 0.1), self._device)
+        if self._device == "cpu":
+            # Telling someone already on the CPU to move to the CPU is how
+            # this read on 2026-09-23, four times, to a pilot whose card had
+            # been taken before listening even started. On the CPU the
+            # contention is for cores, and the way out is upstream of here:
+            # the card was free once and the choice was made without it.
+            advice = ("Whisper is on the CPU - it was put there because the "
+                      "card was already busy when listening started - and now "
+                      "the simulator wants the cores too. Start listening "
+                      "before the simulator loads a flight and it gets the "
+                      "card instead, which is both faster and far more "
+                      "accurate.")
+        else:
+            advice = ("Whisper is on %s and something else is using it, "
+                      "almost always the simulator. Start SLCVoiceAI before "
+                      "the simulator, or set [stt] device = \"cpu\" to be "
+                      "unaffected by it." % self._device)
+        log.warning("That took %.0fs to decode %.1fs of audio - %.0f times "
+                    "longer than it should. %s",
+                    took, seconds, took / max(seconds, 0.1), advice)

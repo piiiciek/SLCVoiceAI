@@ -33,6 +33,14 @@ ALIASES: dict[str, tuple[str, ...]] = {
                   "alright thanks", "thank you very much"),
     "thanks very much": ("thank you very much", "many thanks"),
     "no problem": ("thats fine", "no worries", "not a problem", "its fine"),
+    # Answering "how are you feeling?" from the cabin. Polish
+    # "wszystko w porzadku" came back as "all good" - not one word
+    # of which is in the button - and the pilot then said it three
+    # more times before giving up and switching to English.
+    "feeling fine": ("all good", "all is well", "everything is fine",
+                     "everything is ok", "everything is good", "im ok",
+                     "im fine", "im good", "doing fine", "doing well",
+                     "no complaints", "all fine"),
 
     # --- radio discipline ------------------------------------------------
     # Answering a call. Polish "prosze mowic" and "tak slucham" come back as
@@ -51,7 +59,13 @@ ALIASES: dict[str, tuple[str, ...]] = {
                  # from one flight to the next; "you can speak" was already
                  # here and "you can continue" was not, so the same words in
                  # Polish worked or failed on the toss of a coin.
-                 "you can continue", "you can go ahead", "please continue"),
+                 "you can continue", "you can go ahead", "please continue",
+                 # How base renders Polish "slucham" and "mozesz mowic"
+                 # when the simulator has the card. Bare "listen" is one
+                 # word, so the whole-utterance guard keeps it from
+                 # firing on "listen to the passengers".
+                 "listen", "can you tell", "can you tell me",
+                 "you can tell me", "tell me", "im all ears"),
     "standby": ("stand by", "wait", "hold on", "one moment", "just a second",
                 "give me a moment", "wait a moment"),
     "repeat transmission": ("say again", "repeat", "repeat that",
@@ -137,8 +151,16 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "start catering": ("send the catering", "catering please", "we need catering",
                        "bring the catering", "let the catering come",
                        "catering to the aircraft"),
+    # Polish "mozecie tankowac" is permission, not an order, and comes
+    # back as "you can refuel" - which scored 0.46 against the button
+    # and fell under the floor. The same shape covers the rest of the
+    # ground services a captain gives permission for.
     "start refuelling": ("start fuelling", "we need fuel", "refuel the aircraft",
-                         "send the fuel truck", "begin refuelling"),
+                         "send the fuel truck", "begin refuelling",
+                         "you can refuel", "you can start refuelling",
+                         "you can fuel", "you may refuel", "you can start fuelling",
+                         "fuel us up", "we are ready for fuel",
+                         "go ahead with refuelling", "you can begin refuelling"),
     "start deboarding": ("start disembarking", "let them off", "begin deboarding"),
     "start deicing": ("de ice the aircraft", "we need deicing", "begin deicing"),
 
@@ -165,8 +187,16 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "release the cabin crew": ("crew can move", "crew are free",
                                "you can move around", "free to move about",
                                "crew released"),
+    # Polish "zajac miejsca" is literally "to take places", and that is
+    # how Whisper renders it - "we ask for a place", "take a look at
+    # the place". The button says SEATS, so the two share no word at
+    # all and the announcement was refused twice in a row.
     "seats for takeoff": ("take your seats", "be seated for takeoff",
-                          "sit down for takeoff", "prepare for takeoff"),
+                          "sit down for takeoff", "prepare for takeoff",
+                          "take your place", "take your places",
+                          "take a place", "please take your places",
+                          "we ask for a place", "we ask you to take your places",
+                          "find your places", "return to your places"),
     "take seats for landing": ("be seated for landing", "sit down for landing",
                                "seats for landing"),
     "prepare cabin for landing": ("secure the cabin", "cabin secure",
@@ -296,9 +326,21 @@ ALIASES: dict[str, tuple[str, ...]] = {
                               "sit down for landing",
                               "everyone sit down we are landing",
                               "sit down we will land in a moment"),
+    # Polish "zaraz startujemy, mozecie usiasc" is a warning plus
+    # permission, and base drops the seating half of it entirely -
+    # "can you take off, start now?" left the right button top of the
+    # list at 0.57, under the floor, and the cloud then read the
+    # wreckage literally and refused. The takeoff half is enough to
+    # go on: SLC has no button for performing a takeoff, so a captain
+    # saying one to the cabin means the seats.
     "be seated for takeoff": ("sit down we are taking off",
                               "sit down for takeoff",
-                              "everyone sit down we are taking off"),
+                              "everyone sit down we are taking off",
+                              "we are taking off", "we are taking off now",
+                              "we are taking off shortly", "taking off now",
+                              "we are departing shortly", "you can sit down",
+                              "you can take your seats", "please sit down",
+                              "take your seats now"),
 
     # --- turning back ------------------------------------------------------
     # Covers RETURN TO AIRPORT and RETURNING TO AIRPORT, which mean the same

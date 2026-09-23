@@ -28,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from slcvoiceai.intent import FuzzyRouter
+from slcvoiceai.slc_ui import SPOKEN_ICONS, humanise_id, is_denied
 
 _args = argparse.ArgumentParser(
     description="Replay a flight log against today's matcher.")
@@ -55,6 +56,38 @@ ESCALATED = re.compile(r"asking gemini|Offline match is weak")
 @dataclass
 class A:
     name: str
+
+
+def is_furniture(name: str) -> bool:
+    """Would today's code keep this name out of the matcher's reach?
+
+    slc_ui.is_chrome answers this from the AutomationId, which the log does
+    not carry - it prints names only. So the id is reconstructed from the
+    name and humanised back: the furniture names ARE humanised ids, so they
+    survive the round trip, while a name SLC wrote itself does not.
+    'Interactions Ground Crew' comes back unchanged; 'THANK YOU' comes back
+    as 'THANKYOU', because the spaces were never word boundaries.
+
+    The round trip alone is not enough, and the first version of this was
+    wrong because of it: a single word with no spaces always survives it, so
+    'ROGER' and 'HELLO?' came back as furniture and the report claimed the
+    fix had taken 58 real commands away. The real is_chrome never had that
+    problem - it humanises cmdPlayCaptainRoger, which gives 'Play Captain
+    Roger' and does not match. Reconstructing from the name loses that, so
+    the second half of the test is the one SLC's own labels always pass:
+    they are written in capitals, and a humanised camelCase id never is.
+
+    An approximation, and it says so - but an approximation of a rule, not
+    a hand-kept list, which is what stops it drifting from the real one.
+    """
+    if is_denied(name):
+        return True
+    if name == name.upper():
+        return False                       # a label SLC wrote itself
+    ident = "cmd" + name.replace(" ", "")
+    if ident.lower() in SPOKEN_ICONS:
+        return False
+    return humanise_id(ident) == name
 
 
 def unquote(text: str) -> str:
@@ -124,9 +157,20 @@ for line in lines:
 router = FuzzyRouter(min_confidence=FLOOR)
 regressed, fixed, changed, still = [], [], [], []
 
+#: Utterances whose old answer today's code will not give, because the
+#: button it pressed was part of the panel. Not regressions - the point.
+furniture_presses = []
+furniture_seen = 0
+
 for said, buttons, before, offline in records:
     if not said.strip():
         continue
+    if any(is_furniture(b) for b in buttons):
+        furniture_seen += 1
+    buttons = [b for b in buttons if not is_furniture(b)]
+    if before is not None and is_furniture(before):
+        furniture_presses.append((said, before))
+        before = None
     actions = [A(b) for b in buttons]
     d = router.decide(said, actions)
     now = actions[d.action_index].name if d.action_index is not None else None
@@ -144,6 +188,13 @@ for said, buttons, before, offline in records:
 total = sum(1 for line in lines if SAID.search(line))
 print("utterances replayed: {n} of {t} - the rest were logged with a "
       "truncated button list".format(n=len(records), t=total))
+print("panel furniture was on offer in {f} of them, and is now stripped "
+      "before the matcher sees it".format(f=furniture_seen))
+print("")
+print("pressed furniture then, cannot now ({n}):".format(
+    n=len(furniture_presses)))
+for said, before in furniture_presses:
+    print("   {s!r:<48} was {b}".format(s=said[:46], b=before))
 print("")
 print("refused then, matched now ({n}):".format(n=len(fixed)))
 for said, now, conf in fixed:

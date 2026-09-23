@@ -77,8 +77,23 @@ def test_an_ordinary_wait_is_not_cried_over(took, clip):
 
 def test_the_explanation_names_the_device_in_use():
     """Telling someone already on the CPU to switch to the CPU is worse
-    than saying nothing."""
-    assert "cpu" in warnings_from(52.0, 1.2, device="cpu")[0].getMessage()
+    than saying nothing.
+
+    This test used to assert only that "cpu" appeared in the message, which
+    the broken advice satisfied by containing the words `device = "cpu"` -
+    so it passed while the pilot read the nonsense four times in the flight
+    of 2026-09-23. What it has to check is the advice, not the word.
+    """
+    said = warnings_from(52.0, 1.2, device="cpu")[0].getMessage()
+    assert 'device = "cpu"' not in said, (
+        "it tells someone already on the CPU to move to the CPU")
+    assert "listening" in said, "it does not say what would actually help"
+
+
+def test_the_gpu_explanation_still_offers_the_cpu():
+    """The advice that is right on the GPU has to survive the branch."""
+    said = warnings_from(52.0, 1.2, device="cuda")[0].getMessage()
+    assert 'device = "cpu"' in said
 
 
 def test_a_stall_is_a_warning_so_the_panel_colours_it():

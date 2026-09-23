@@ -48,6 +48,9 @@ DENYLIST = (
     # Settings-window commit buttons, in case a config window slips through.
     "save changes and close",
     "apply changes",
+    # Opens the window WINDOW_DENYLIST already refuses to read. Pressing it
+    # can only put a panel on screen that the bridge then ignores.
+    "audio manager",
 )
 
 #: Windows that are configuration or meta UI rather than flight controls.
@@ -282,6 +285,43 @@ def humanise_id(automation_id: str) -> str:
     return " ".join(w for w in words if w).strip()
 
 
+#: Icon-only controls the pilot may still address out loud: the three that
+#: change the aircraft rather than the panel. Matched on AutomationId, since
+#: the displayed name of an icon is ours rather than SLC's.
+SPOKEN_ICONS = ("cmdseatbelts", "cmdtoggledoors", "cmdtoggledoormode")
+
+
+def is_chrome(name: str, automation_id: str) -> bool:
+    """Is this SLC's own furniture rather than a command the pilot gives?
+
+    SLC draws two kinds of control side by side. The phrases the captain
+    says carry SLC's own label, in capitals: 'GROUND CREW >', 'ROGER',
+    'LADIES AND GENTLEMEN'. The toolbar icons and the tab strip carry no
+    accessible name at all, so humanise_id() invents one from the id - and
+    the invention reads exactly like a command. cmdInteractionsCrew becomes
+    'Interactions Crew', which is a thoroughly sensible answer to "tell the
+    crew to start boarding", and is a tab.
+
+    Measured over the logs to 2026-09-23, across 304 fuzzy decisions: an
+    invented name was the top pick 69 times and the runner-up 162 times, and
+    92 of the 123 escalations to Gemini happened because one of them scored
+    alongside a real command. Thirteen presses landed on furniture. The model
+    was not being careless - it was choosing from a menu in which half the
+    entries were the panel itself.
+
+    So an invented name is not offered. This fails closed, which is the right
+    way round here: SLC gains icons far more readily than phrases, and a
+    phrase button has never yet arrived without a label of its own.
+    """
+    ident = (automation_id or "").strip()
+    label = (name or "").strip()
+    if not ident or not label:
+        return False
+    if ident.lower() in SPOKEN_ICONS:
+        return False
+    return humanise_id(ident) == label
+
+
 def is_visible(control) -> bool:
     """Is this control actually on screen right now?
 
@@ -459,7 +499,8 @@ class SlcUI:
         return found
 
     def list_actions(self, include_disabled: bool = False,
-                     include_hidden: bool = False) -> list[Action]:
+                     include_hidden: bool = False,
+                     include_chrome: bool = False) -> list[Action]:
         """Every control SLC is actually offering the pilot right now.
 
         Re-walks the tree on every call: SLC's communications popup appears
@@ -467,6 +508,10 @@ class SlcUI:
 
         Pass include_hidden=True to get the whole command tree instead - only
         useful for exploring what SLC can do, never for routing a command.
+
+        Pass include_chrome=True to keep SLC's own furniture - the toolbar
+        icons and the tab strip - in the list. Also exploration only: see
+        is_chrome for what routing on them cost.
         """
         actions: list[Action] = []
         #: name -> [index into actions, is that one on top?]. The second
@@ -509,11 +554,16 @@ class SlcUI:
                         log.debug("Skipping %r - its tooltip says %r",
                                   name, hint)
                         continue
+                    ident = (ctl.AutomationId or "").strip()
+                    if not include_chrome and is_chrome(name, ident):
+                        log.debug("Skipping %r - panel furniture, not a "
+                                  "command", name)
+                        continue
                     action = Action(
                         name=name,
                         window=win_name,
                         control_type=ctl.ControlTypeName.replace("Control", ""),
-                        automation_id=(ctl.AutomationId or "").strip(),
+                        automation_id=ident,
                         enabled=enabled,
                         tooltip=hint,
                         _control=ctl,

@@ -52,13 +52,20 @@ min_seconds = 0.35      # ignore accidental taps of the PTT key
 #   >=  700 MB   base       0.40s          weaker still
 #    <  700 MB   base on the CPU - a starved GPU is slower than a free CPU
 #
-# Free VRAM is read when the bridge starts, so start it after the simulator
-# for the choice to reflect a real flight. Check with:
+# Free VRAM is read when you press Start listening, not when the panel opens,
+# and neither order of starting is free: switch listening on first and MSFS
+# takes the VRAM back from a model already resident; switch it on afterwards
+# and there is nothing left, so auto drops to base on the CPU. That happened
+# on 2026-09-23 with 451 MB free, and since the task below is "translate",
+# the weakest translator in the table is the worst possible outcome:
+# "mozecie tankowac" arrived as "can you pass the bus to tank?".
+#
+# So name a model here instead. An explicit choice is a decision, not a
+# suggestion: it is not re-read and not downgraded. "medium" is the sensible
+# default on a card with room; "small" on a smaller one. Check what auto
+# would pick with:
 #
 #   python -m slcvoiceai --check-hardware
-#
-# Naming a model here overrides all of that - an explicit choice is a
-# decision, not a suggestion.
 model = "auto"
 device = "auto"          # "auto", "cuda" or "cpu"
 compute_type = "auto"    # "auto", "int8" or "float16"

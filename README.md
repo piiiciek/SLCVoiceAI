@@ -187,8 +187,10 @@ python -m slcvoiceai --list-devices
 
 ## Picking a Whisper model
 
-`model = "auto"` (the default) reads free VRAM at startup and picks the largest
-model that fits with headroom:
+`model = "auto"` (the default) reads free VRAM and picks the largest model that
+fits with headroom. It reads it **when you press Start listening**, not when the
+panel opens — the panel can sit there for an hour and the choice is still made
+at the moment you switch listening on:
 
 | Free VRAM | Model | Per command | Download | Notes |
 |---|---|---|---|---|
@@ -209,15 +211,41 @@ simulator wins: on a 16 GB card MSFS 2024 routinely holds 15 GB, which left
 `large-v3` in float16 fighting for the last few hundred megabytes and turning
 2-second transcriptions into 92-second ones.
 
-Free VRAM is read when the bridge starts, so **start it after the simulator**
-for the choice to reflect a real flight. To see what it would pick:
+Which makes the order you start things in matter, and neither order is free:
+
+- **Listening on before the simulator** — the card is empty, so `auto` takes
+  `large-v3`. Then MSFS loads and takes the VRAM back, and the model that is
+  already resident has to fight for it. This is how a 2-second transcription
+  became a 92-second one.
+- **Listening on after the simulator** — the card is already gone, so `auto`
+  falls to `base` on the CPU. That is the fast-looking row in the table above,
+  and on a non-English flight it is the worst thing that can happen to you.
+  Measured over a Kraków–Rome flight on 2026-09-23: 76 commands, a median of
+  3.3s each against 1.0s on the GPU, and the transcripts were not Polish at
+  all. `możecie tankować` came out as *"can you pass the bus to tank?"* and
+  `głośno i wyraźnie` as *"clear and clear"*. Every single one of the 70
+  decisions that flight had to be escalated to Gemini, because nothing scored
+  well enough to settle offline.
+
+So the real answer is not an order of operations. **Name a model in
+`config.toml`** and the question disappears:
+
+```toml
+[stt]
+model = "medium"     # or "small" on a smaller card
+device = "cuda"
+```
+
+An explicit choice is treated as a decision, not a suggestion: it is not
+re-read, not downgraded, and does not depend on when you pressed the button.
+Leave `auto` only if you are willing to check the subtitle line under the
+status — it names the model and the device in use every time listening starts.
+
+To see what `auto` would pick right now:
 
 ```bash
 python -m slcvoiceai --check-hardware
 ```
-
-Naming a model in `config.toml` overrides all of it — an explicit choice is
-treated as a decision, not a suggestion.
 
 ## Matching intent: local first, cloud only if needed
 
@@ -389,19 +417,21 @@ The watcher imports nothing but the standard library. It has to be cheap: it
 runs from login to shutdown, and asking ctypes whether a process exists costs
 about ten milliseconds every five seconds.
 
-**What it does to the speech model.** The panel picks a Whisper model from
-the VRAM free when it loads, so when it starts decides what you get. This used
-to carry a warning that launching with SLC would push the model down; measuring
-it says otherwise, because `SLC.exe` turns up early — before the simulator has
-loaded a flight — and the panel gets in while the card is still mostly free.
-Three launches this way took `medium`; starting the panel by hand during a
-loaded session, with 986 MB left, took `base`.
+**What it does to the speech model.** With "Start listening when SLC opens"
+also ticked, this is what settles the question in *Picking a Whisper model*
+above: `SLC.exe` turns up early, before the simulator has loaded a flight, so
+listening begins while the card is still mostly free. This used to carry a
+warning that launching with SLC would push the model down; measuring it says
+otherwise. Three launches this way took `medium`; switching listening on by
+hand during a loaded session, with 986 MB left, took `base`, and once — on
+2026-09-23, with 451 MB left — `base` on the CPU, which cost that flight its
+accuracy outright.
 
-The old warning still holds for the case it was really about: if SLC only
-starts once a flight is already loaded, the panel loads into whatever is left.
-Starting it before the simulator remains the surest way; the watcher is for
-when you would rather not have to remember, and on this machine it turned out
-to be the better habit rather than the worse one.
+So the watcher is the better habit rather than the worse one, for the reason
+that it does not depend on remembering. It is still not a substitute for
+naming the model in `config.toml`: if SLC itself only starts once a flight is
+loaded, the watcher launches into whatever is left, exactly as a hand start
+would.
 
 ### Headless
 
@@ -450,6 +480,13 @@ file.
 Deliberate guardrails, because a misfire mid-approach is worse than being asked to repeat yourself:
 
 - **Visibility filter.** The model is only ever shown controls SLC is currently displaying, so it cannot reach a command that is out of context for the phase of flight.
+- **No furniture.** SLC's toolbar icons and its tab strip carry no accessible
+  name, so the bridge invents one from the AutomationId — and the inventions
+  read exactly like commands: `cmdInteractionsCrew` becomes "Interactions
+  Crew", which is a tab and a thoroughly plausible answer to "tell the crew to
+  start boarding". None of them are offered to the matcher. Only the three
+  icons that change the aircraft rather than the panel survive: the seatbelt
+  sign, the doors and the gate mode.
 - **Denylist.** Session-ending and flight-destroying controls — `EXIT SELF-LOADING CARGO`, `CLOSE SELF-LOADING CARGO`, `CANCEL SINGLE FLIGHT`, `DISPATCH NEXT FLIGHT`, `DO NOT RESTORE PREVIOUS FLIGHT` and friends — are stripped before the model ever sees them. It cannot press what it cannot see. The list lives in `slcvoiceai/slc_ui.py`.
 - **The denylist is checked against the tooltip too**, not only against the name, because some of those names are ours rather than SLC's. `cmdStandBy` has no accessible name at all and humanises to a harmless-looking `Stand By`; its tooltip reads *"Close SLC or Restart Flight"*.
 - **Start-a-new-flight buttons are gated on flight state.** SLC leaves them on the toolbar for the whole flight, and pressing one ends it. They cannot be denylisted outright — at the launcher they are the ordinary way to begin — so they are offered only when SLC's stream export says there is no flight in progress. With the export off the bridge cannot tell, and keeps them hidden: you can always start a flight with the mouse, and you cannot un-end one.
