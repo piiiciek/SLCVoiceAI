@@ -156,6 +156,10 @@ def describe() -> str:
                     m=model, d=device, c=compute, w=waiting))
     return ("GPU: {gpu}\n"
             "Auto would pick: {m} on {d} ({c}).{w}\n\n"
-            "Free VRAM is measured now, so start the simulator first if you "
-            "want this to reflect a real flight.".format(
+            "Free VRAM is measured now, and the real choice is made when "
+            "you press Start listening - so this reflects a flight only if "
+            "the simulator is already loaded. Neither order of starting is "
+            "free, which is why naming a model in config.toml is the "
+            "durable answer: an explicit choice is not re-read and not "
+            "downgraded.".format(
                 gpu=gpu, m=model, d=device, c=compute, w=waiting))
