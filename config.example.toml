@@ -160,7 +160,14 @@ fallback_model = ""
 # gemini-3.1-flash-lite is the recommended free-tier model and is plenty for
 # picking one button off a short list.
 model = "gemini-3.1-flash-lite"
-fallback_model = "gemini-3.1-flash-lite"
+
+# Used on 429 and 503, and it has to be a DIFFERENT model than the one
+# above - naming the same one asks whatever just failed to try again.
+# This shipped pointing at itself and cost nothing until 2026-09-24, when
+# every flash-lite model answered 503 "high demand" and the retry was
+# useless. A heavier flash model is the point: it is the one still
+# answering when the light one is swamped.
+fallback_model = "gemini-3.6-flash"
 
 # Paste your key between the quotes. Free one: https://aistudio.google.com/apikey
 # config.toml is in .gitignore so this stays out of any repository - but strip
