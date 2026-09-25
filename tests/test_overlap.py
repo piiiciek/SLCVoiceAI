@@ -231,3 +231,28 @@ def test_an_unrelated_hit_does_not_walk_up_forever(monkeypatch):
         node = FakeControl("parent", "cmdParent", parent=node)
     hit_returns(monkeypatch, node)
     assert not slc_ui.is_topmost(FakeControl("BACK", "cmdBack"))
+
+
+# -- measuring the scan ----------------------------------------------------
+
+def test_the_scan_reports_what_it_cost(monkeypatch, caplog):
+    """Every flight should measure the scan instead of us inferring it from
+    the gap between transcription and press.
+
+    What matters is the count, not only the clock: each GetChildren and each
+    rectangle read crosses into SLC's process, and a crossing costs far more
+    with the simulator running than on the idle machine where every
+    measurement behind this code was taken.
+    """
+    controls = [FakeControl("ROGER", "cmdPlayCaptainRoger"),
+                FakeControl("GO AHEAD", "cmdPlayCaptainGoAhead")]
+    with caplog.at_level("INFO"):
+        offering(monkeypatch, controls)
+    assert "Read SLC in" in caplog.text
+    assert "trip(s)" in caplog.text
+
+
+def test_the_counter_survives_a_walk_from_anywhere():
+    """close_slc.py and probe_cache.py call _walk directly, without going
+    through list_actions - so the counter cannot live only there."""
+    assert slc_ui.SlcUI._trips == 0

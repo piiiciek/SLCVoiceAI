@@ -517,6 +517,11 @@ def help_text(control) -> str:
 class SlcUI:
     """A live view of what Self-Loading Cargo can currently be told to do."""
 
+    #: Crossings into SLC's process during the last scan. A class
+    #: attribute so a walk started from anywhere - a probe, a test -
+    #: has something to add to.
+    _trips = 0
+
     def __init__(self, process_name: str = "SLC.exe", max_depth: int = 25):
         self.process_name = process_name
         self.max_depth = max_depth
@@ -598,6 +603,8 @@ class SlcUI:
         is_chrome for what routing on them cost.
         """
         actions: list[Action] = []
+        started = time.time()
+        self._trips = 0
         #: name -> [index into actions, is that one on top?]. The second
         #: entry stays None until a collision makes it worth finding out.
         seen: dict[tuple[str, str], list] = {}
@@ -677,6 +684,10 @@ class SlcUI:
                     slot[1] = True
                 except Exception:
                     continue
+
+        took = time.time() - started
+        log.info("Read SLC in %.2fs: %d button(s) from %d trip(s) across "
+                 "the process boundary.", took, len(actions), self._trips)
         return actions
 
     def _walk(self, node, depth: int = 0, prune_hidden: bool = True):
@@ -686,15 +697,24 @@ class SlcUI:
         everything beneath it - there is no point paying a COM round-trip per
         node to walk into it. On a live SLC this takes the traversal from 558
         nodes to 75 while returning exactly the same actions.
+
+        Every GetChildren and every rectangle read crosses into SLC's
+        process, and that is what the scan costs. `_trips` counts them,
+        because with the simulator running a crossing is worth far more than
+        it is on an idle machine - and every measurement that shaped this
+        code was taken on an idle one.
         """
         if depth > self.max_depth:
             return
         try:
             children = node.GetChildren()
+            self._trips += 1
         except Exception:
             return
         for child in children:
-            if prune_hidden and not is_visible(child):
-                continue
+            if prune_hidden:
+                self._trips += 1
+                if not is_visible(child):
+                    continue
             yield child
             yield from self._walk(child, depth + 1, prune_hidden)
