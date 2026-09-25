@@ -46,6 +46,19 @@ CREW = ["ROGER", "THANK YOU", "GO AHEAD", "HELLO?", "STANDBY", "DISREGARD",
         "RELEASE THE CABIN CREW", "LADIES AND GENTLEMEN", "WELCOME ABOARD"]
 
 
+#: The offer lists exactly as SLC showed them during the ground test of
+#: 2026-09-25, furniture already stripped.
+CABIN_25 = ["Toggle Door Mode", "Seatbelts", "Toggle Doors", "INTERCOM >",
+            "P A SYSTEM >", "PHONE >", "HOW'S IT GOING?",
+            "HOW LONG UNTIL BOARDING?", "TURN THE MUSIC ON",
+            "TURN THE MUSIC OFF", "TURN THE MUSIC UP", "TURN THE MUSIC DOWN",
+            "CAN I HAVE SOME TEA?", "CAN I HAVE SOME COFFEE?",
+            "CAN I HAVE SOME WATER?", "PURSER TO INTERCOM", "BACK"]
+GROUND_25 = ["GROUND CREW >", "GO AHEAD", "ROGER", "LOUD AND CLEAR",
+             "REPEAT TRANSMISSION", "STANDBY", "DISREGARD", "BACK",
+             "CONNECT JETWAY", "DISCONNECT JETWAY", "I'LL ASK FOR A JETWAY",
+             "Toggle Door Mode", "Toggle Doors"]
+
 def route(said: str, buttons: list[str]) -> str | None:
     actions = [FakeAction(b) for b in buttons]
     decision = FuzzyRouter(min_confidence=0.65).decide(said, actions)
@@ -156,3 +169,69 @@ def test_asking_for_places_and_telling_people_to_sit_stay_apart(said, want):
 def test_a_phrase_with_no_entry_is_still_refused():
     """Adding a language must not turn the matcher into a guesser."""
     assert route("powtórzcie", CREW) is None
+
+# -- what the ground test of 2026-09-25 taught -----------------------------
+
+@pytest.mark.parametrize("said,want", [
+    # Every one of these went to the cloud and came back three seconds later.
+    # The offline layer had the meaning; it did not have the wording.
+    ("Czy mogę poprosić się o herbatę?", "CAN I HAVE SOME TEA?"),
+    ("Poproszę kogoś do interkomu", "PURSER TO INTERCOM"),
+    ("Możecie włączyć muzykę?", "TURN THE MUSIC ON"),
+])
+def test_politeness_and_an_infinitive_reach_the_button(said, want):
+    """He does not give orders in the imperative, he asks: "mozecie wlaczyc",
+    "czy moge poprosic". The table was written the other way round."""
+    assert route(said, CABIN_25) == want
+
+
+@pytest.mark.parametrize("said,want", [
+    ("Czysto i wyraźnie", "LOUD AND CLEAR"),
+    ("Okej, zrozumiałem", "ROGER"),
+    ("dobra, zrozumiałem", "ROGER"),
+    ("Możecie podłączyć jetway?", "CONNECT JETWAY"),
+])
+def test_more_of_the_same_from_the_ground_test(said, want):
+    assert route(said, GROUND_25) == want
+
+
+def test_okej_is_a_filler_like_ok():
+    """"OK, zrozumialem" scored 1.00 and "Okej, zrozumialem" scored 0.50, for
+    no better reason than that "ok" happens to be a ROGER alias and its Polish
+    twin was not - so one word was accounted for and the other was not."""
+    assert route("OK, zrozumiałem", GROUND_25) == "ROGER"
+    assert route("Okej, zrozumiałem", GROUND_25) == "ROGER"
+
+
+@pytest.mark.parametrize("said,want", [
+    ("Możecie podłączyć jetway?", "CONNECT JETWAY"),
+    ("Możecie odłączyć jetway?", "DISCONNECT JETWAY"),
+    ("Możecie włączyć muzykę?", "TURN THE MUSIC ON"),
+    ("Możecie wyłączyć muzykę?", "TURN THE MUSIC OFF"),
+])
+def test_the_politeness_word_does_not_tie_the_pairs(said, want):
+    """The first draft of this batch put "mozecie" in both halves of each
+    pair. Two words in three are then shared, the two score 1.00 together,
+    and the command is refused - which is how the fix would have shipped
+    looking like a regression."""
+    offer = CABIN_25 if "muzyk" in said else GROUND_25
+    assert route(said, offer) == want
+
+
+def test_polish_filler_leaves_only_what_was_meant():
+    assert normalise("Czy mogę poprosić się o herbatę?") == "poprosic herbate"
+
+
+def test_the_polish_vocabulary_survives_a_full_screen():
+    """"do interkomu" came back as "do literkomu", which no alias can rescue -
+    the word never arrived. The hint list is where that is fixed, and it has a
+    budget, so the Polish has to survive a screen full of button names."""
+    from slcvoiceai.vocabulary import build_prompt, load_terms
+
+    live = ("GROUND CREW >", "INTERCOM >", "P A SYSTEM >", "CONNECT JETWAY",
+            "GSX, START REFUELLING", "DISCONNECT JETWAY", "STANDBY",
+            "REQUEST LOADING UPDATE", "STARTING THE APU", "RADIO CHECK",
+            "DISREGARD", "BACK", "ROGER", "GO AHEAD", "LOUD AND CLEAR")
+    prompt = build_prompt(load_terms(), live)
+    for word in ("interkom", "rękaw", "herbata"):
+        assert word in prompt, word

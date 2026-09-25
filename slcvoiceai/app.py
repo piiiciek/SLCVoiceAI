@@ -274,9 +274,24 @@ class Bridge:
 
             action = self.find_named(actions, name)
             if action is None:
-                log.warning("Hotkey %s: nothing called %r among %d button(s): %s",
+                # BACK on screen means a submenu is open, which is the whole
+                # reason the call is missing - the main row is one level up.
+                # Listing seven buttons the pilot can already see, without
+                # saying that, is a riddle rather than a message.
+                back = next((a for a in actions
+                             if a.name.strip().upper() == "BACK"), None)
+                hint = ""
+                if back is not None:
+                    bound = (self.cfg.hotkeys or {}).get("back", "")
+                    if bound:
+                        from . import keys
+                        hint = (" A submenu is open - go back first, your "
+                                "{k}.".format(k=keys.pretty(bound)))
+                    else:
+                        hint = " A submenu is open; go back to the main row first."
+                log.warning("Hotkey %s: nothing called %r among %d button(s): %s%s",
                             label, name, len(actions),
-                            ", ".join(a.name for a in actions))
+                            ", ".join(a.name for a in actions), hint)
                 return
 
             if self.cfg.behaviour.dry_run:
@@ -316,7 +331,21 @@ class Bridge:
     #: on screen to say so: the button sits at 0x0 exactly like the sixty
     #: other inapplicable ones. A bridge that pressed it on a guess would
     #: put the captain on the radio uninvited.
-    BEHIND_A_SUBMENU = {"GO AHEAD": "ground"}
+    #: Buttons that exist only while a menu is open, and which menu opens
+    #: them. GO AHEAD was the first, from the flight of 2026-09-23. The
+    #: intercom calls were added on 2026-09-25, when "Hello" was refused with
+    #: "that button is not being offered" while the identical situation on
+    #: the ground channel said "open GROUND CREW first - your Page Up".
+    #: The same information was available in both cases; only one message
+    #: had been taught to use it.
+    BEHIND_A_SUBMENU = {
+        "GO AHEAD": "ground",
+        "HELLO": "intercom",
+        "HELLO?": "intercom",
+        "PURSER TO INTERCOM": "intercom",
+        "CABIN CREW TO INTERCOM": "intercom",
+        "LADIES AND GENTLEMEN": "pa",
+    }
 
     def _how_to_reach(self, missing: str, actions) -> str:
         """What the pilot can do about it, in their own key bindings."""

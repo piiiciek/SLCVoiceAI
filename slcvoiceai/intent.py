@@ -74,6 +74,15 @@ _NOISE = {
     "our", "your", "we", "i", "it", "that", "this", "will", "can", "could",
     "would", "you", "us", "them", "slc", "captain", "cockpit", "me", "my",
     "some", "just", "now", "there",
+    # The same class of word in Polish, and the reason a perfectly ordinary
+    # request missed on 2026-09-25: "czy moge poprosic sie o herbate" carried
+    # four structural words against two that meant anything, and the scorer
+    # counts what it cannot account for. "czy" is the question particle,
+    # "sie" the reflexive, "prosze" is literally "please" (already here),
+    # "moge"/"mozna" are "can"/"could" (already here), and "o" is a
+    # preposition like "to" and "for" above. With these gone the utterance
+    # reduces to "poprosic herbate" and lands on its button at 1.00.
+    "czy", "sie", "prosze", "moge", "mozna", "o",
     # A preposition like the ones above, and the only reason "5 by 5" - the
     # standard answer to a radio check - scored 0.67 against 'Stand By' and
     # pressed it in flight. One shared preposition was carrying the whole
@@ -136,6 +145,10 @@ ALIAS_MIN_COVERAGE = 0.6
 #: so the reach damping halved a perfect match.
 _DISCOURSE = frozenset({
     "ok", "okay", "alright", "well", "right", "yeah", "yep", "hmm", "so",
+    # "ok" scored 1.00 in "OK, zrozumialem" only because it is itself a ROGER
+    # alias, so every word was accounted for. "okej" and "dobra" mean the same
+    # and were not, which halved the score of the identical sentence.
+    "okej", "dobra", "no",
 })
 
 #: A decisive win can stand in for a high score. Chatter does not merely score
@@ -419,7 +432,14 @@ class FuzzyRouter:
         # Two candidates within a whisker of each other means guessing, not
         # matching - and when they are opposites ("connect" / "disconnect"
         # jetway) guessing is actively dangerous.
-        if margin < 0.05:
+        # len(scored) > 1, because with a single candidate runner_up is
+        # 0.0 and the margin is just the score - so a very poor match
+        # against the only button on screen read as a tie, and the tie
+        # message reached for scored[1], which is not there. SLC really
+        # does offer one button sometimes: a submenu showing only BACK.
+        # It falls through to the weak-match branch instead, which is
+        # what a lone poor candidate actually is.
+        if margin < 0.05 and len(scored) > 1:
             # Saying a button's name exactly is the strongest signal there is,
             # so let it settle a tie: "intercom" should reach "INTERCOM >" and
             # not stall against "PURSER TO INTERCOM", which merely contains

@@ -672,6 +672,66 @@ for _key, _forms in POLISH_MORE.items():
     ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
 
 
+# --------------------------------------------------------------------------
+# A third pass, from the ground test of 2026-09-25 - the first time the
+# Polish table met the pilot rather than my idea of the pilot.
+#
+# The tables above were written in the imperative, because that is how an
+# order is phrased. He does not give orders that way. He asks: "mozecie
+# wlaczyc muzyke", "mozecie podlaczyc jetway", "czy moge poprosic o herbate".
+# **Politeness plus an infinitive**, where I had written the bare plural
+# imperative. Every one of those went to the cloud and came back three
+# seconds later; the offline layer had the meaning and not the wording.
+#
+# He also says "jetway", not "rekaw". The English word is the one in the
+# cockpit, and the button is called CONNECT JETWAY, so of course he does.
+#
+# One trap found while testing this and worth writing down: the politeness
+# word must NOT go in. Adding "mozecie wlaczyc muzyke" to one family and
+# "mozecie wylaczyc muzyke" to the other tied them at 1.00 - two words in
+# three are shared - and the command was refused. Only the distinguishing
+# verb belongs here. It is the same lesson as SEATS FOR TAKEOFF, learned
+# twice now.
+POLISH_SPOKEN: dict[str, tuple[str, ...]] = {
+    "can i have some tea": ("poprosić o herbatę", "prosić o herbatę",
+                            "herbatę", "herbaty"),
+    "can i have some coffee": ("poprosić o kawę", "prosić o kawę",
+                               "kawę", "kawy"),
+    "can i have some water": ("poprosić o wodę", "prosić o wodę",
+                              "wodę", "wody"),
+    "can i have a snack": ("poprosić o przekąskę", "coś do jedzenia"),
+    "purser to intercom": ("kogoś do interkomu", "kogoś na interkom",
+                           "szefa pokładu do interkomu"),
+    "loud and clear": ("czysto i wyraźnie", "czysto i głośno"),
+    # the verb only - see the note above about ties
+    "turn the music on": ("włączyć muzykę", "puścić muzykę"),
+    "turn the music off": ("wyłączyć muzykę",),
+    "turn the music up": ("podgłośnić", "zrobić głośniej"),
+    "turn the music down": ("ściszyć", "zrobić ciszej"),
+    # he says jetway, in Polish sentences, because that is its name
+    "connect jetway": ("podłączyć jetway", "podłączcie jetway",
+                       "podstawić jetway", "jetway proszę"),
+    "disconnect jetway": ("odłączyć jetway", "odłączcie jetway",
+                          "zabrać jetway"),
+    "ill ask for a jetway": ("poproszę o jetway", "zamówię jetway"),
+    "start refuelling": ("zatankować", "tankować"),
+    "start catering": ("zacząć catering",),
+    "start boarding": ("zacząć boarding", "wpuszczać pasażerów"),
+    "open the doors": ("otworzyć drzwi",),
+    "please close the doors": ("zamknąć drzwi",),
+    "seatbelts": ("zapiąć pasy", "włączyć pasy"),
+    "start pushback": ("wypychać",),
+    "release the cabin crew": ("zwolnić załogę",),
+    "prepare cabin for landing": ("przygotować kabinę do lądowania",),
+    # "ok" reached ROGER because it is an alias; its Polish twins were not
+    "roger": ("okej", "dobra", "no dobra"),
+}
+
+for _key, _forms in POLISH_SPOKEN.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
 def aliases_for(button_name: str) -> tuple[str, ...]:
     """Every alias phrase registered for this button name.
 

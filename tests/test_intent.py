@@ -1105,3 +1105,54 @@ def test_every_submenu_it_names_is_one_a_key_can_open():
         assert action in ACTIONS, (
             "{b} is said to be behind {a}, which is not a bindable action"
             .format(b=button, a=action))
+
+
+def test_one_button_and_a_bad_match_does_not_crash():
+    """SLC offers a single button often enough - a submenu showing only BACK -
+    and with one candidate the runner-up score is 0.0, so the margin equals
+    the score. A Polish sentence scoring 0.03 against 'BACK' therefore looked
+    like a tie, and the tie message reached for a second candidate that was
+    not there. The command was lost with a traceback.
+
+    Found while watching a real test session on 2026-09-25.
+    """
+    from slcvoiceai.intent import FuzzyRouter
+
+    class One:
+        name = "BACK"
+        window = "Self-Loading Cargo"
+
+    decision = FuzzyRouter(min_confidence=0.65).decide(
+        "przygotujcie kabinę do lądowania proszę", [One()])
+    assert decision.action_index is None
+    assert decision.gave_up == "nothing_close", (
+        "a lone poor candidate is a weak match, not a tie")
+
+def _advice_for(missing, bindings, names):
+    """As _advice, for a button other than GO AHEAD."""
+    import types
+
+    from slcvoiceai.app import Bridge
+
+    stand_in = types.SimpleNamespace(
+        cfg=types.SimpleNamespace(hotkeys=bindings),
+        BEHIND_A_SUBMENU=Bridge.BEHIND_A_SUBMENU)
+    actions = [types.SimpleNamespace(name=n) for n in names]
+    return Bridge._how_to_reach(stand_in, missing, actions)
+
+
+def test_the_intercom_calls_get_the_same_help_as_the_ground_ones():
+    """On 2026-09-25 "Hello" was refused with "that button is not being
+    offered", while the identical situation on the ground channel said "open
+    GROUND CREW first - your Page Up". The information was there both times;
+    only one message had been taught to use it.
+    """
+    on_screen = ["INTERCOM >", "P A SYSTEM >", "PHONE >", "BACK"]
+    said = _advice_for("HELLO", {"intercom": "home"}, on_screen)
+    assert "INTERCOM" in said and "Home" in said
+
+
+def test_a_button_behind_no_menu_still_says_only_what_it_knows():
+    assert "not being offered" in _advice_for(
+        "SOME OTHER BUTTON", {"intercom": "home"}, ["INTERCOM >"])
+

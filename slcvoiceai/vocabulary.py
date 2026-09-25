@@ -29,6 +29,18 @@ MAX_PROMPT_CHARS = 900
 #: that are already unambiguous in general English ("please", "thanks") are
 #: left out - they cost prompt budget and change nothing.
 DEFAULT_TERMS = (
+    # The pilot's own language comes first, because it is the half at
+    # risk. The English half is largely covered anyway: build_prompt
+    # puts the buttons SLC is showing right now in front of all of
+    # this, and those are English. What no button supplies is the
+    # Polish word for the thing - and on 2026-09-25 "do interkomu"
+    # came back as "do literkomu", which no alias can rescue because
+    # the word never arrived.
+    "interkom", "rękaw", "jetway", "tankowanie", "catering",
+    "boarding", "pasażerowie", "załoga", "obsługa naziemna",
+    "kokpit", "szef pokładu", "kabina", "pasy", "drzwi",
+    "schody", "wypychanie", "odladzanie", "zasilanie", "hamulec",
+    "zniżanie", "lądowanie", "muzyka", "herbata", "kawa", "woda",
     # ground handling
     "ground crew", "jetway", "stairs", "pushback", "tow", "GSX",
     "refuelling", "catering", "deicing", "chocks", "GPU", "APU",
