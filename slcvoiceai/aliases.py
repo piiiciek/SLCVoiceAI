@@ -785,6 +785,95 @@ for _key, _forms in POLISH_LONG.items():
     ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
 
 
+# --------------------------------------------------------------------------
+# He keeps the English word for the thing and puts Polish grammar round it.
+# "mozecie podlaczyc jetway", "ok, pin po prawej" - not "rekaw", not
+# "zawleczka". Those are the words written on the buttons and used in the
+# cockpit, so they are the words he reaches for, and a table full of correct
+# Polish translations sails past them.
+#
+# Both spellings stay: the Polish ones are what someone else might say, and
+# they cost nothing.
+POLISH_LOANWORDS: dict[str, tuple[str, ...]] = {
+    "pin left": ("pin po lewej", "pin z lewej", "pin lewy", "lewy pin"),
+    "pin right": ("pin po prawej", "pin z prawej", "pin prawy", "prawy pin"),
+    "ready for pushback": ("gotowi do pushbacku", "gotowi na pushback",
+                           "gotowy do pushbacku"),
+    "start pushback": ("zaczynamy pushback", "możecie zacząć pushback",
+                       "pushback proszę"),
+    "stop pushback": ("stop pushback", "zatrzymajcie pushback"),
+    "start catering": ("catering proszę", "możecie zacząć catering",
+                       "zaczynamy catering"),
+    "start deicing": ("możecie zacząć deicing", "deicing proszę"),
+    "start boarding": ("boarding proszę", "możecie zacząć boarding"),
+    "start deboarding": ("zaczynamy deboarding",),
+    "starting the apu": ("startuję apu", "odpalam apu"),
+    "please disconnect gpu": ("odłączcie gpu", "możecie odłączyć gpu",
+                              "gpu odłączone"),
+    "connect jetway": ("jetway poproszę", "możecie podstawić jetway"),
+    "disconnect jetway": ("możecie zabrać jetway",),
+    "request loading update": ("jak idzie loading", "status loadingu"),
+    "awaiting the loadsheet": ("czekam na loadsheet", "loadsheet proszę"),
+}
+
+for _key, _forms in POLISH_LOANWORDS.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
+# --------------------------------------------------------------------------
+# Whole sentences, because a short alias cannot reach a long one.
+#
+# The score compares whole strings, so "siadajcie" against "ok, mozecie juz
+# siadac, za chwile bedzie start" scores 0.29 even though the stem rule
+# matched the only word that mattered. Coverage says the alias applies;
+# the score says it does not fit, and the score is right that they are not
+# the same length. Stemming the score too was tried and tied CONNECT to
+# DISCONNECT, so the answer is to write the sentence out.
+#
+# Rule of thumb when adding: an entry reaches a sentence about its own
+# length. If he says nine words, three will not do.
+POLISH_SENTENCES: dict[str, tuple[str, ...]] = {
+    "be seated for takeoff": ("mozecie juz siadac za chwile bedzie start",
+                              "mozecie siadac zaraz startujemy",
+                              "prosze siadac za chwile start",
+                              "mozecie juz siadac"),
+    "seats for takeoff": ("prosze zajac miejsca przed startem",),
+    "prepare cabin for landing": ("mozecie przygotowac kabine do ladowania",
+                                  "prosze przygotowac kabine do ladowania"),
+    "take seats for landing": ("mozecie juz siadac zaraz ladujemy",),
+    "release the cabin crew": ("mozecie sie odpiac", "mozecie wstac"),
+}
+
+for _key, _forms in POLISH_SENTENCES.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
+# The rest of the afternoon, same shape: what he said, at the length he
+# said it.
+POLISH_CRUISE: dict[str, tuple[str, ...]] = {
+    "were climbing to cruise": ("wznosimy sie do kursu",
+                                "wznosimy sie na poziom",
+                                "wznosimy sie do poziomu przelotowego"),
+    "normal cruise": ("kurs normalny", "kurs zapowiadany jest na normalne",
+                      "normalny kurs", "przelot normalny"),
+    "brief cruise": ("kurs krotki", "krotki kurs"),
+    "ill speak to you later": ("pozniej sie do panstwa odezwe",
+                               "odezwe sie do panstwa pozniej",
+                               "do uslyszenia pozniej"),
+    "thank you": ("dziekuje ze wybraliscie nasze linie lotnicze",
+                  "dziekuje za wybor naszych linii",
+                  "dziekujemy ze lecicie z nami"),
+    "were running late": ("jestesmy troszeczke spoznieni",
+                          "mamy male opoznienie"),
+}
+
+for _key, _forms in POLISH_CRUISE.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
 def aliases_for(button_name: str) -> tuple[str, ...]:
     """Every alias phrase registered for this button name.
 
