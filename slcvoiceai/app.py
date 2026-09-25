@@ -12,7 +12,8 @@ from .config import Config
 from .context import (FLIGHT_FIELDS, flight_is_underway, format_context,
                       read_flight_context)
 from .intent import build_router
-from .slc_ui import SlcUI, UIAUnavailable, starts_a_new_flight
+from .slc_ui import (SlcUI, UIAUnavailable, foreground_window,
+                     restore_foreground, starts_a_new_flight)
 
 log = logging.getLogger(__name__)
 
@@ -300,7 +301,7 @@ class Bridge:
                 continue
 
             try:
-                action.invoke()
+                self._press(action)
                 log.info("Pressed %r  (hotkey %s, step %d/%d, %.1fs)",
                          action.name, label, step, len(wanted),
                          time.time() - started)
@@ -346,6 +347,27 @@ class Bridge:
         "CABIN CREW TO INTERCOM": "intercom",
         "LADIES AND GENTLEMEN": "pa",
     }
+
+    def _press(self, action) -> None:
+        """Invoke the control, and hand the foreground back if it moves.
+
+        Both press paths go through here so neither can forget. When
+        nothing moves - which is what Invoke() is supposed to do - this
+        costs one call to GetForegroundWindow and says nothing.
+        """
+        before = foreground_window()
+        action.invoke()
+        after = foreground_window()
+        if not before or after == before:
+            return
+        if restore_foreground(before):
+            log.info("Pressing %r moved the foreground; put it back.",
+                     action.name)
+        else:
+            log.warning(
+                "Pressing %r moved the foreground and it would not go "
+                "back. The simulator runs at about 25 fps while it is not "
+                "in front; clicking its window restores it.", action.name)
 
     def _how_to_reach(self, missing: str, actions) -> str:
         """What the pilot can do about it, in their own key bindings."""
@@ -461,7 +483,7 @@ class Bridge:
             return
 
         try:
-            action.invoke()
+            self._press(action)
             log.info("Pressed %r  (%.2f confidence, %.1fs, %s)",
                      action.name, decision.confidence, elapsed, language)
         except Exception as exc:

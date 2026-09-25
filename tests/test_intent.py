@@ -1156,3 +1156,57 @@ def test_a_button_behind_no_menu_still_says_only_what_it_knows():
     assert "not being offered" in _advice_for(
         "SOME OTHER BUTTON", {"intercom": "home"}, ["INTERCOM >"])
 
+
+
+# -- giving the foreground back --------------------------------------------
+
+def _pressing(moved_to, restores=True):
+    """Bridge._press with the window calls stubbed, so the rule is what is
+    under test rather than Windows."""
+    import types
+
+    from slcvoiceai import app as app_module
+    from slcvoiceai.app import Bridge
+
+    seen = {"invoked": False, "restored": None}
+    front = [1234]                       # the simulator, before the press
+
+    def invoke():
+        seen["invoked"] = True
+        front[0] = moved_to
+
+    def restore(hwnd):
+        seen["restored"] = hwnd
+        return restores
+
+    saved = (app_module.foreground_window, app_module.restore_foreground)
+    app_module.foreground_window = lambda: front[0]
+    app_module.restore_foreground = restore
+    try:
+        Bridge._press(types.SimpleNamespace(),
+                      types.SimpleNamespace(name="ROGER", invoke=invoke))
+    finally:
+        app_module.foreground_window, app_module.restore_foreground = saved
+    return seen
+
+
+def test_a_press_that_moves_nothing_touches_nothing():
+    """Invoke() is not supposed to raise a window, and when it does not this
+    must cost nothing but a question to Windows."""
+    seen = _pressing(moved_to=1234)
+    assert seen["invoked"] is True
+    assert seen["restored"] is None
+
+
+def test_a_press_that_steals_the_foreground_gives_it_back():
+    """The simulator drops to about 25 fps the moment it stops being in
+    front, and has no setting to say otherwise - so whatever SLC does with
+    its own window, the pilot should not pay for it."""
+    seen = _pressing(moved_to=9999)
+    assert seen["restored"] == 1234, "it put back the window that was there"
+
+
+def test_a_foreground_that_will_not_come_back_is_reported(caplog):
+    with caplog.at_level("WARNING"):
+        _pressing(moved_to=9999, restores=False)
+    assert "25 fps" in caplog.text, "the pilot is told why the sim is slow"

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -104,6 +105,49 @@ def starts_a_new_flight(name: str, automation_id: str = "",
         if any(hint in low for hint in _FLIGHT_STARTER_TEXT) and "flight" in low:
             return True
     return False
+
+
+def foreground_window() -> int:
+    """Whatever window Windows currently considers in front, or 0."""
+    if os.name != "nt":
+        return 0
+    try:
+        return int(ctypes.windll.user32.GetForegroundWindow())
+    except Exception:
+        return 0
+
+
+def restore_foreground(hwnd: int) -> bool:
+    """Put `hwnd` back in front, and say whether it worked.
+
+    The simulator drops to about 25 fps the moment it stops being the
+    foreground window, and there is no setting in it to say otherwise - so a
+    press that brings SLC forward costs the pilot half their frame rate for
+    as long as it takes them to click back. Invoke() should not raise a
+    window at all; SLC appears to raise its own.
+
+    SetForegroundWindow refuses a process that is not already in front,
+    which is exactly our situation, so the input queues are attached first.
+    That is the documented way round it and it is what every window manager
+    helper on Windows does.
+    """
+    if os.name != "nt" or not hwnd:
+        return False
+    user32 = ctypes.windll.user32
+    if user32.GetForegroundWindow() == hwnd:
+        return True
+    ours = ctypes.windll.kernel32.GetCurrentThreadId()
+    theirs = user32.GetWindowThreadProcessId(
+        user32.GetForegroundWindow(), None)
+    attached = bool(user32.AttachThreadInput(ours, theirs, True))
+    try:
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        return False
+    finally:
+        if attached:
+            user32.AttachThreadInput(ours, theirs, False)
+    return user32.GetForegroundWindow() == hwnd
 
 
 class UIAUnavailable(RuntimeError):
