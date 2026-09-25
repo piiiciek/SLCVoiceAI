@@ -235,3 +235,75 @@ def test_the_polish_vocabulary_survives_a_full_screen():
     prompt = build_prompt(load_terms(), live)
     for word in ("interkom", "rękaw", "herbata"):
         assert word in prompt, word
+
+# -- the second ground test, 2026-09-25 ------------------------------------
+
+#: What SLC offered on the ground channel that afternoon.
+GROUND_25B = ["GROUND CREW >", "INTERCOM >", "GO AHEAD", "ROGER", "WILL DO",
+              "LOUD AND CLEAR", "STANDBY", "DISREGARD", "BACK",
+              "CONNECT JETWAY", "DISCONNECT JETWAY", "PLEASE DISCONNECT GPU",
+              "STARTING THE APU", "GSX, START BOARDING", "GSX, START CATERING",
+              "Toggle Door Mode", "Toggle Doors", "Seatbelts"]
+CABIN_25B = ["INTERCOM >", "P A SYSTEM >", "PHONE >", "HOW'S IT GOING?",
+             "HOW LONG UNTIL BOARDING?", "INSTANT BOARDING",
+             "TURN THE MUSIC ON", "CAN I HAVE SOME TEA?",
+             "HOW ARE THE PASSENGERS?", "ROGER", "Toggle Door Mode",
+             "Toggle Doors", "BACK"]
+
+
+def test_a_question_about_boarding_does_not_start_boarding():
+    """The one wrong press of the session, and the worst kind: he asked how
+    long boarding would take and INSTANT BOARDING was pressed, which starts
+    it. Two buttons share the word "boarding"; the shorter name won on the
+    single word they have in common - 0.67 against 0.54 - which is a rule
+    about string length deciding something about meaning.
+    """
+    assert route("jak długo będzie boarding", CABIN_25B) == \
+        "HOW LONG UNTIL BOARDING?"
+    assert route("ile potrwa boarding", CABIN_25B) == "HOW LONG UNTIL BOARDING?"
+
+
+@pytest.mark.parametrize("said,want", [
+    ("OK, poproszę o odłączenie zasilania zewnętrznego",
+     "PLEASE DISCONNECT GPU"),
+    ("Zaczynamy procedurę włączenia APU", "STARTING THE APU"),
+    ("zrozumiano", "ROGER"),
+    ("Ok, zrozumiem", "ROGER"),
+    ("ok, zrobię to", "WILL DO"),
+    ("podłącz jetway", "CONNECT JETWAY"),
+])
+def test_the_second_ground_test_settles_offline(said, want):
+    assert route(said, GROUND_25B) == want
+
+
+@pytest.mark.parametrize("said,want", [
+    ("podłącz jetway", "CONNECT JETWAY"),
+    ("odłącz jetway", "DISCONNECT JETWAY"),
+    ("możecie podłączyć jetway", "CONNECT JETWAY"),
+    ("możecie odłączyć jetway", "DISCONNECT JETWAY"),
+])
+def test_stemming_did_not_merge_the_jetway_pair(said, want):
+    """The stem rule shortens words to five characters, and the whole
+    question is whether that is short enough to keep podlacz from odlacz.
+    It is - but stemming the *score* as well was tried and was not: it
+    lifted CONNECT into a tie with DISCONNECT and refused the command.
+    """
+    assert route(said, GROUND_25B) == want
+
+
+@pytest.mark.parametrize("word_a,word_b,same", [
+    ("zasilanie", "zasilania", True),
+    ("zrozumialem", "zrozumiano", True),
+    ("podlaczcie", "podlacz", True),
+    ("odlaczcie", "podlacz", False),
+    ("wlaczyc", "wylaczyc", False),
+    ("herbate", "kawe", False),
+    # too short to stem: these must stay exact or everything collides
+    ("tak", "tam", False),
+    ("apu", "apu", True),
+])
+def test_the_stem_rule_itself(word_a, word_b, same):
+    from slcvoiceai.intent import same_word
+
+    assert same_word(word_a, word_b) is same
+

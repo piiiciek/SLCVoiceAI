@@ -241,6 +241,18 @@ ALIASES: dict[str, tuple[str, ...]] = {
                       "whats the situation"),
     "how are the passengers": ("how are the people", "are the passengers ok",
                                "how is the cabin"),
+    # STARTING ENGINE 1 and 2 differ by one character, so a Polish
+    # sentence ties them every time - 0.48 against 0.44 on "startujemy
+    # z silnikiem numer 2". The ordinal is the word that has to carry
+    # it, since the digit alone is one token among many.
+    "starting engine 1": ("pierwszy silnik", "silnik numer jeden",
+                          "silnik numer 1", "silnik jeden",
+                          "startujemy pierwszy",
+                          "startujemy z silnikiem numer 1"),
+    "starting engine 2": ("drugi silnik", "silnik numer dwa",
+                          "silnik numer 2", "silnik dwa",
+                          "startujemy drugi",
+                          "startujemy z silnikiem numer 2"),
 
     # --- descent ----------------------------------------------------------
     # Even once Whisper says "descend" instead of "reduce", the wording it
@@ -728,6 +740,47 @@ POLISH_SPOKEN: dict[str, tuple[str, ...]] = {
 }
 
 for _key, _forms in POLISH_SPOKEN.items():
+    POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
+    ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
+
+
+# --------------------------------------------------------------------------
+# What the stem rule could not reach, from the same test.
+#
+# intent.STEM lets an alias word match a spoken word with a different ending,
+# which settled "zrozumiem", "zrobie to" and "podlacz jetway". It does not
+# help when the sentence is long and the alias is short, because the score
+# itself still compares whole strings - "poprosze o odlaczenie zasilania
+# zewnetrznego" reaches "odlaczcie zasilanie" on coverage and then scores
+# 0.30 on length alone. Stemming the score as well was tried and rejected:
+# it lifted CONNECT JETWAY into a tie with DISCONNECT JETWAY, which is the
+# one thing this matcher must never do.
+#
+# So these are spelled out at the length he actually says them.
+POLISH_LONG: dict[str, tuple[str, ...]] = {
+    "please disconnect gpu": ("odłączenie zasilania zewnętrznego",
+                              "odłączyć zasilanie zewnętrzne",
+                              "zasilanie zewnętrzne"),
+    "starting the apu": ("procedura włączenia apu", "włączenie apu",
+                         "uruchomienie apu", "zaczynamy apu"),
+    "roger": ("zrozumiano", "przyjęto"),
+    "will do": ("zrobię to", "zrobię"),
+    # He asked how long boarding would take and got INSTANT BOARDING, which
+    # starts it. Two words share "boarding"; the shorter name won on the one
+    # they share. Naming the question outright settles it without touching
+    # the scoring rule that let it happen.
+    "how long until boarding": ("jak długo będzie boarding",
+                                "jak długo boarding", "ile potrwa boarding",
+                                "jak długo jeszcze boarding",
+                                "kiedy boarding"),
+    "how are the passengers": ("jak się czują pasażerowie",),
+    # The other direction: he says both "kokpit do obslugi" and "obsluga do
+    # kokpitu", and they are different requests.
+    "cabin crew to intercom": ("obsługa do kokpitu", "załoga do kokpitu",
+                               "obsługa lotu do kokpitu"),
+}
+
+for _key, _forms in POLISH_LONG.items():
     POLISH[_key] = POLISH.get(_key, ()) + tuple(_forms)
     ALIASES[_key] = ALIASES.get(_key, ()) + tuple(_forms)
 

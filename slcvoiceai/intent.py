@@ -132,6 +132,22 @@ def fold(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", lowered)
                    if not unicodedata.combining(c))
 
+#: How much of a word has to be there before the ending stops mattering.
+#:
+#: Polish inflects at the end and nowhere else, so the coverage guard below -
+#: which compared whole words - was asking the pilot to hit a grammatical form
+#: rather than a meaning. "odlaczcie zasilanie" against "poprosze o
+#: odlaczenie zasilania zewnetrznego" scored zero: every word was the right
+#: word with the wrong ending.
+#:
+#: Five characters, because that is long enough to keep the pairs apart that
+#: must stay apart. Measured on the ones that matter: podlacz/odlacz,
+#: wlaczyc/wylaczyc and herbate/kawe all differ inside the first five, and
+#: none of them reach the 0.6 threshold on each other. English is
+#: unaffected: its words rarely share a five-character stem without
+#: sharing a meaning.
+STEM = 5
+
 #: Fraction of an alias's own words that must appear in the utterance before
 #: that alias is allowed to stand in for its button. Guards against short
 #: aliases matching on one incidental shared word.
@@ -220,6 +236,26 @@ def polarity_conflict(said_tokens: set[str], candidate_tokens: set[str]) -> bool
     return False
 
 
+def same_word(alias_word: str, said_word: str) -> bool:
+    """The same word, allowing for a different ending.
+
+    An exact match first, because most of the table is English and English
+    endings carry less. Then the stem: if both are long enough and their
+    first STEM characters agree, this is one word in two grammatical coats.
+    """
+    if alias_word == said_word:
+        return True
+    if len(alias_word) < STEM or len(said_word) < STEM:
+        return False
+    return alias_word[:STEM] == said_word[:STEM]
+
+
+def _covered(alias_tokens, said_tokens) -> int:
+    """How many of an alias's words the utterance actually contains."""
+    return sum(1 for a in alias_tokens
+               if any(same_word(a, s) for s in said_tokens))
+
+
 def normalise(text: str, spoken: bool = True) -> str:
     """Lowercase, drop punctuation and filler, collapse whitespace.
 
@@ -278,7 +314,7 @@ class FuzzyRouter:
             # to "what say") matched "what is the weather in krakow today" on
             # the strength of "what" alone.
             tokens = set(candidate.split())
-            coverage = len(tokens & said_tokens) / len(tokens)
+            coverage = _covered(tokens, said_tokens) / len(tokens)
             if coverage < ALIAS_MIN_COVERAGE:
                 continue
 
