@@ -27,7 +27,9 @@ ALIASES: dict[str, tuple[str, ...]] = {
               "ok", "okay", "alright", "sure", "thanks for the information",
               "thanks for the info", "thank you for the information",
               "good to know", "understood thanks", "noted thanks"),
-    "will do": ("wilco", "we will", "i will do that", "consider it done"),
+    # "we will" used to be here and could never fire: both its words are in
+# intent._NOISE, so it normalises to nothing at all.
+"will do": ("wilco", "i will do that", "consider it done"),
     "thank you": ("thanks", "thanks a lot", "cheers", "much appreciated",
                   "appreciate it", "ok thanks", "okay thanks", "thanks then",
                   "alright thanks", "thank you very much"),
@@ -229,8 +231,8 @@ ALIASES: dict[str, tuple[str, ...]] = {
     # "super, moze byc" comes back as "It can be. Super." or "Great, it can
     # be done." - literal renderings of "moze byc" that share nothing with
     # "THAT'S PERFECT".
-    "perfect": ("it can be", "it can be done", "great it can be done",
-                "super it can be", "it can be super", "that can be",
+    "perfect": ("it can be done", "great it can be done",
+                "super it can be", "it can be super", 
                 "that works", "yes that can be",
                 "that will do", "good enough", "super", "great", "thats fine",
                 "leave it there", "just right", "thats good"),

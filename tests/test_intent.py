@@ -1210,3 +1210,22 @@ def test_a_foreground_that_will_not_come_back_is_reported(caplog):
     with caplog.at_level("WARNING"):
         _pressing(moved_to=9999, restores=False)
     assert "25 fps" in caplog.text, "the pilot is told why the sim is slow"
+
+
+def test_no_alias_normalises_to_nothing():
+    """An alias made entirely of filler words is dead on arrival: normalise
+    reduces it to an empty string and the matcher skips it without a word.
+
+    Three had been sitting in the table like that - "we will" for WILL DO,
+    "it can be" and "that can be" for PERFECT - each of them a phrasing
+    somebody had deliberately added and which could never once have fired.
+    Nothing warns, because skipping an empty candidate is also the correct
+    behaviour for a table with none.
+    """
+    from slcvoiceai.aliases import ALIASES
+    from slcvoiceai.intent import normalise
+
+    dead = [(key, phrase) for key, phrases in ALIASES.items()
+            for phrase in phrases if not normalise(phrase, spoken=False)]
+    assert dead == [], (
+        "these can never match, every word of them is filler: {d}".format(d=dead))

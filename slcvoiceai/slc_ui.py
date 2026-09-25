@@ -107,12 +107,43 @@ def starts_a_new_flight(name: str, automation_id: str = "",
     return False
 
 
+def _declare_window_calls():
+    """Tell ctypes the shapes, because the defaults are wrong here.
+
+    An HWND is a pointer, so on 64-bit Windows it does not fit the c_int
+    ctypes assumes when nothing says otherwise - a handle above 2^31 comes
+    back truncated or negative, and is then passed back in truncated. Handles
+    are usually small enough to get away with it, which is exactly what makes
+    it the kind of fault that appears once on somebody else's machine.
+    """
+    if os.name != "nt":
+        return None, None
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetForegroundWindow.argtypes = []
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND,
+                                                ctypes.POINTER(wintypes.DWORD)]
+    user32.AttachThreadInput.restype = wintypes.BOOL
+    user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD,
+                                         wintypes.BOOL]
+    kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+    kernel32.GetCurrentThreadId.argtypes = []
+    return user32, kernel32
+
+
+_USER32, _KERNEL32 = _declare_window_calls()
+
+
 def foreground_window() -> int:
     """Whatever window Windows currently considers in front, or 0."""
-    if os.name != "nt":
+    if _USER32 is None:
         return 0
     try:
-        return int(ctypes.windll.user32.GetForegroundWindow())
+        return int(_USER32.GetForegroundWindow() or 0)
     except Exception:
         return 0
 
@@ -131,23 +162,28 @@ def restore_foreground(hwnd: int) -> bool:
     That is the documented way round it and it is what every window manager
     helper on Windows does.
     """
-    if os.name != "nt" or not hwnd:
+    if _USER32 is None or not hwnd:
         return False
-    user32 = ctypes.windll.user32
-    if user32.GetForegroundWindow() == hwnd:
-        return True
-    ours = ctypes.windll.kernel32.GetCurrentThreadId()
-    theirs = user32.GetWindowThreadProcessId(
-        user32.GetForegroundWindow(), None)
-    attached = bool(user32.AttachThreadInput(ours, theirs, True))
     try:
-        user32.SetForegroundWindow(hwnd)
+        if int(_USER32.GetForegroundWindow() or 0) == hwnd:
+            return True
+        ours = _KERNEL32.GetCurrentThreadId()
+        theirs = _USER32.GetWindowThreadProcessId(
+            _USER32.GetForegroundWindow(), None)
+        # Attaching to our own queue fails and is not needed; carry on and
+        # let SetForegroundWindow try on its own.
+        attached = bool(theirs and theirs != ours
+                        and _USER32.AttachThreadInput(ours, theirs, True))
+        try:
+            _USER32.SetForegroundWindow(wintypes.HWND(hwnd))
+        finally:
+            if attached:
+                _USER32.AttachThreadInput(ours, theirs, False)
+        return int(_USER32.GetForegroundWindow() or 0) == hwnd
     except Exception:
+        # Nothing here is worth failing a command over: the press already
+        # happened and the worst case is a slower simulator.
         return False
-    finally:
-        if attached:
-            user32.AttachThreadInput(ours, theirs, False)
-    return user32.GetForegroundWindow() == hwnd
 
 
 class UIAUnavailable(RuntimeError):
